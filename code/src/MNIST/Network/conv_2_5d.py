@@ -163,7 +163,7 @@ class Malleable_Conv2_5D_Depth(nn.Module):
         output += torch.matmul(self.weight_1.view(-1,C*self.kernel_size_prod), (x_col*mask_1).view(N, C*self.kernel_size_prod, out_H*out_W)) * weight[1]
         output += torch.matmul(self.weight_2.view(-1,C*self.kernel_size_prod), (x_col*mask_2).view(N, C*self.kernel_size_prod, out_H*out_W)) * weight[2]
         output = output.view(N,-1,out_H,out_W)
-        if self.bias:
+        if self.bias is not None:
             output += self.bias.view(1,-1,1,1)
         return output
 

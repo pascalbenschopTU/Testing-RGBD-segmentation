@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from Network.RGBD_classification_network import RGBDClassifier
 from Data_Preprocess.Transform_MNIST import MNIST_Transformer
 from Data_Preprocess.Download_MNIST import download_MNIST_data
+from torch.utils.data.sampler import SubsetRandomSampler
 
 # Set the device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -16,7 +17,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 location = "../../data/"
 
 ##################### Constants ######################
-data_creation = True
+data_creation = False
 plotting = True
 
 ##################### Data creation ######################
@@ -31,7 +32,7 @@ if data_creation:
     save_folder = location + "MNIST_with_background_select/"
 
     # Create the dataset
-    transformer.create_rgbd_MNIST_with_background(save_folder, train_color=(0, 255, 0), test_color=(255, 0, 0))
+    transformer.create_rgbd_MNIST_with_background(save_folder, train_color=(255, 0, 0), test_color=(0, 255, 255))
 
 
 ##################### MNIST with background ######################
@@ -84,8 +85,27 @@ rgb_accuracy_list = []
 rgbd_accuracy_list = []
 
 # Train the model
-num_epochs = 10
-for epoch in range(num_epochs):
+def reset_model():
+    # Create the neural network model
+    rgbd_model = RGBDClassifier(image_width=image_width, image_height=image_height).to(device)
+    rgb_model = RGBDClassifier(image_width=image_width, image_height=image_height).to(device)
+
+    # Define the loss function and optimizer
+    criterion = nn.CrossEntropyLoss()
+
+    rgbd_optimizer = optim.Adam(rgbd_model.parameters(), lr=0.001)
+    rgb_optimizer = optim.Adam(rgb_model.parameters(), lr=0.001)
+
+    return rgbd_model, rgb_model, criterion, rgbd_optimizer, rgb_optimizer
+
+# Reset the model before each data size iteration
+for data_size in range(50):
+    rgbd_model, rgb_model, criterion, rgbd_optimizer, rgb_optimizer = reset_model()
+
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=False, 
+                              sampler=SubsetRandomSampler(range(int((data_size/50) * len(train_dataset)))))
+
+    # Continue with the rest of the code...
     for batch_idx, (data, targets) in enumerate(train_loader):
         data = data.to(device)
         targets = targets.to(device)
@@ -94,7 +114,7 @@ for epoch in range(num_epochs):
 
         x = data[:, :, :, :3].permute(0, 3, 1, 2) / 255.0
         depth = data[:, :, :, 3:4].permute(0, 3, 1, 2) / 255.0
-        fake_depth = torch.zeros_like(depth)
+        fake_depth = torch.ones_like(depth)
 
         camera_params['intrinsic']['fx'] = torch.ones((data.shape[0], 1, 1)).to(device) * 500
         
@@ -110,59 +130,80 @@ for epoch in range(num_epochs):
         rgb_optimizer.step()
 
         if (batch_idx + 1) % 100 == 0:
-            print(f'Epoch [{epoch+1}/{num_epochs}], Step [{batch_idx+1}/{len(train_loader)}], rgb loss: {rgb_loss.item():.4f}, rgbd loss: {rgbd_loss.item():.4f}')
-
+            print(f'Step [{batch_idx+1}/{len(train_loader)}], rgb loss: {rgb_loss.item():.4f}, rgbd loss: {rgbd_loss.item():.4f}')
 
     # Evaluate the model
     predictions = []
 
     rgbd_model.eval()
     rgb_model.eval()
-    # with torch.no_grad():
-    rgbd_correct = 0
-    rgb_correct = 0
-    total = 0
-    for data, targets in test_loader:
-        data = data.to(device)
-        targets = targets.to(device)
+    with torch.no_grad():
+        rgbd_correct = 0
+        rgb_correct = 0
+        total = 0
+        for data, targets in test_loader:
+            data = data.to(device)
+            targets = targets.to(device)
 
-        x = data[:, :, :, :3].permute(0, 3, 1, 2) / 255.0
-        depth = data[:, :, :, 3:4].permute(0, 3, 1, 2) / 255.0
-        fake_depth = torch.zeros_like(depth)
+            x = data[:, :, :, :3].permute(0, 3, 1, 2) / 255.0
+            depth = data[:, :, :, 3:4].permute(0, 3, 1, 2) / 255.0
+            fake_depth = torch.ones_like(depth)
 
-        camera_params['intrinsic']['fx'] = torch.ones((data.shape[0], 1, 1)).to(device) * 500
+            camera_params['intrinsic']['fx'] = torch.ones((data.shape[0], 1, 1)).to(device) * 500
 
-        rgbd_outputs = rgbd_model(x, depth, camera_params)
-        rgb_outputs = rgb_model(x, fake_depth, camera_params)
+            rgbd_outputs = rgbd_model(x, depth, camera_params)
+            rgb_outputs = rgb_model(x, fake_depth, camera_params)
 
-        _, rgbd_predicted = torch.max(rgbd_outputs.data, 1)
-        _, rgb_predicted = torch.max(rgb_outputs.data, 1)
+            _, rgbd_predicted = torch.max(rgbd_outputs.data, 1)
+            _, rgb_predicted = torch.max(rgb_outputs.data, 1)
 
-        total += targets.size(0)
-        rgbd_correct += (rgbd_predicted == targets).sum().item()
-        rgb_correct += (rgb_predicted == targets).sum().item()
+            total += targets.size(0)
+            rgbd_correct += (rgbd_predicted == targets).sum().item()
+            rgb_correct += (rgb_predicted == targets).sum().item()
 
-        predictions.append({
-            "image": data.cpu().numpy(),
-            "label": targets.cpu().numpy(),
-            "rgbd_prediction": rgbd_predicted.cpu().numpy(),
-            "rgb_prediction": rgb_predicted.cpu().numpy()
-        })
+            predictions.append({
+                "image": data.cpu().numpy(),
+                "label": targets.cpu().numpy(),
+                "rgbd_prediction": rgbd_predicted.cpu().numpy(),
+                "rgb_prediction": rgb_predicted.cpu().numpy()
+            })
 
-    rgbd_accuracy = 100 * rgbd_correct / total
-    rgb_accuracy = 100 * rgb_correct / total
-    print(f'Test RGBD Accuracy: {rgbd_accuracy:.2f}%')
-    print(f'Test RGB Accuracy: {rgb_accuracy:.2f}%')
+        rgbd_accuracy = 100 * rgbd_correct / total
+        rgb_accuracy = 100 * rgb_correct / total
+        print(f'Test RGBD Accuracy: {rgbd_accuracy:.2f}%')
+        print(f'Test RGB Accuracy: {rgb_accuracy:.2f}%')
+        print(f"Data size: {data_size/50 * 100}%")
 
-    rgbd_accuracy_list.append(rgbd_accuracy)
-    rgb_accuracy_list.append(rgb_accuracy)
+        rgbd_accuracy_list.append(rgbd_accuracy)
+        rgb_accuracy_list.append(rgb_accuracy)
 
 
 # Plot the accuracy over epochs
 if plotting:
-    plt.plot(rgbd_accuracy_list, label="RGBD")
-    plt.plot(rgb_accuracy_list, label="RGB")
-    plt.xlabel("Epochs")
+    x_values = [i*2 for i in range(len(rgbd_accuracy_list))]
+    plt.plot(x_values, rgbd_accuracy_list, label="RGBD")
+    plt.plot(x_values, rgb_accuracy_list, label="RGB")
+    plt.ylabel("Accuracy")
+    plt.xlabel("Data size (percentage)")
+    plt.title("Accuracy of a RGBD and RGB classifier on MNIST with random background colors")
+    plt.legend()
+    plt.xlim(0, 100)
+    plt.show()
+
+# Plot the predictions
+if plotting:
+    for x in range(10):
+        fig, ax = plt.subplots(5, 5, figsize=(20, 20))
+        fig.suptitle('Predictions', fontsize=20)
+        for i in range(5):
+            for j in range(5):
+                image = predictions[x]["image"][i+5*j][:, :, :3]
+                image = (image - image.min()) / (image.max() - image.min())  # Normalize image
+                ax[i, j].imshow(image)
+                ax[i, j].set_title(f"Label: {predictions[x]['label'][i+5*j]}\nRGBD Prediction: {predictions[x]['rgbd_prediction'][i+5*j]}\nRGB Prediction: {predictions[x]['rgb_prediction'][i+5*j]}")
+                ax[i, j].axis('off')
+
+        plt.show()
     plt.ylabel("Accuracy")
     plt.title("Accuracy of a RGBD and RGB classifier on MNIST with random background colors")
     plt.legend()
