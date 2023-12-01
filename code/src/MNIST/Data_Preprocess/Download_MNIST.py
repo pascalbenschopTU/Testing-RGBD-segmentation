@@ -1,8 +1,6 @@
-import torch
 from torchvision import datasets, transforms
 
-
-def get_MNIST_data(location):
+def download_MNIST_data(location):
     # Define the transform to apply to the data
     transform = transforms.Compose([
         transforms.ToTensor(),

@@ -1,13 +1,6 @@
 import torch
 import torch.nn as nn
 
-
-location = "../../data/"
-location_MNIST_background = location + "MNIST_with_background/"
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-
 # Define the neural network architecture
 class RGBClassifier(nn.Module):
     def __init__(self):
