@@ -29,10 +29,20 @@ if data_creation:
     transformer = MNIST_Transformer(location, train_images, train_labels, test_images, test_labels)
 
     # Create a dataset with a random colored background
-    save_folder = location + "MNIST_with_background_select/"
+    save_folder = location + "MNIST_with_background_noise/"
 
     # Create the dataset
-    transformer.create_rgbd_MNIST_with_background(save_folder, train_color=(255, 0, 0), test_color=(0, 255, 255))
+    transformer.create_rgbd_MNIST_with_background(
+        save_folder, 
+        train_transforms=[
+            lambda img, depth: transformer.transform_add_background(img, depth, color_range=(255, 0, 0)),
+            lambda img, depth: transformer.transform_add_noise(img, depth, img_noise_range=(100, 255), depth_noise_range=(0, 1)),
+        ],
+        test_transforms=[
+            lambda img, depth: transformer.transform_add_background(img, depth, color_range=(0, 255, 255)),
+            lambda img, depth: transformer.transform_add_noise(img, depth, img_noise_range=(100, 255), depth_noise_range=(0, 1)),
+        ]
+    )
 
 
 ##################### MNIST with background ######################

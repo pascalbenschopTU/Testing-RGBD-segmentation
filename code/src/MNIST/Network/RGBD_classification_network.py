@@ -65,28 +65,28 @@ class RGBDClassifier(nn.Module):
         super(RGBDClassifier, self).__init__()
         self.image_width = image_width
         self.image_height = image_height
-        
-        # Initialize the layers and weights
-        self.conv1 = DepthAwareConv2d(in_channels=3, out_channels=16, kernel_size=3, stride=1, padding=1)
-        # nn.init.xavier_uniform_(self.conv1.weight_0)
-        # nn.init.xavier_uniform_(self.conv1.weight_1)
-        # nn.init.xavier_uniform_(self.conv1.weight_2)
-        # nn.init.zeros_(self.conv1.bias)
+
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv1 = nn.Conv2d(in_channels=4, out_channels=32, kernel_size=3, stride=1, padding=1)  
         nn.init.xavier_uniform_(self.conv1.weight)
         nn.init.zeros_(self.conv1.bias)
-
-        self.conv2 = DepthAwareConv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1)
-        # nn.init.xavier_uniform_(self.conv2.weight_0)
-        # nn.init.xavier_uniform_(self.conv2.weight_1)
-        # nn.init.xavier_uniform_(self.conv2.weight_2)
+        
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
         nn.init.xavier_uniform_(self.conv2.weight)
         nn.init.zeros_(self.conv2.bias)
 
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.fc1 = nn.Linear(16 * self.image_width // 2 * self.image_height // 2, 128)
+        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv3 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1)
+        nn.init.xavier_uniform_(self.conv3.weight)
+        nn.init.zeros_(self.conv3.bias)
+
+        self.flatten = nn.Flatten()
+
+        self.fc1 = nn.Linear(128 * (image_width // (2**3)) * (image_height // (2**3)), 128)
         nn.init.xavier_uniform_(self.fc1.weight)
         nn.init.zeros_(self.fc1.bias)
-
+        
         self.fc2 = nn.Linear(128, 10)
         nn.init.xavier_uniform_(self.fc2.weight)
         nn.init.zeros_(self.fc2.bias)
@@ -97,20 +97,21 @@ class RGBDClassifier(nn.Module):
         self.gradients = grad
 
     def forward(self, x, depth, camera_params):
-        x = F.relu(self.conv1(x, depth, camera_params))
+        x = torch.concat((x, depth), dim=1)
 
-        # Re use x_depth and use x as x_rgb
-        x = self.pool1(F.relu(self.conv2(x, depth, camera_params)))
+        x = self.pool1(F.relu(self.conv1(x)))
+        x = self.pool2(F.relu(self.conv2(x)))
+        x = self.pool3(F.relu(self.conv3(x)))
 
         # Register the hook only if x requires gradient
         if x.requires_grad:
             h = x.register_hook(self.activations_hook)
 
-        x = x.reshape(-1, 16 * self.image_width // 2 * self.image_height // 2)
-        x = self.fc1(x)
-        x = self.fc2(x)
+        x = self.flatten(x)
+        x = F.relu(self.fc1(x))
+        x = F.log_softmax(self.fc2(x), dim=1)
 
-        return F.log_softmax(x, dim=1)
+        return x
     
     # Method for the gradient extraction
     def get_activations_gradient(self):
