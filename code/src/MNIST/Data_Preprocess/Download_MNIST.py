@@ -18,7 +18,3 @@ def download_MNIST_data(location):
     test_labels = test_dataset.targets
 
     return train_images, train_labels, test_images, test_labels
-
-    # # Create data loaders
-    # train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
-    # test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=False)

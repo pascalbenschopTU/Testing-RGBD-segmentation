@@ -14,53 +14,47 @@ from torch.utils.data.sampler import SubsetRandomSampler
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Specify the folder where you want to save the dataset
-location = "../../data/"
+data_location = "../../data/"
+test_location = data_location + "MNIST_with_background/"
 
 ##################### Constants ######################
-data_creation = False
+data_creation = True
 plotting = True
 
 ##################### Data creation ######################
 
 if data_creation:
-    train_images, train_labels, test_images, test_labels = download_MNIST_data(location)
+    train_images, train_labels, test_images, test_labels = download_MNIST_data(data_location)
 
     # Create a transformer object
-    transformer = MNIST_Transformer(location, train_images, train_labels, test_images, test_labels)
-
-    # Create a dataset with a random colored background
-    save_folder = location + "MNIST_with_background_noise/"
+    transformer = MNIST_Transformer(train_images, train_labels, test_images, test_labels)
 
     # Create the dataset
     transformer.create_rgbd_MNIST_with_background(
-        save_folder, 
+        test_location, 
         train_transforms=[
-            lambda img, depth: transformer.transform_add_background(img, depth, color_range=(255, 0, 0)),
-            lambda img, depth: transformer.transform_add_noise(img, depth, img_noise_range=(100, 255), depth_noise_range=(0, 1)),
+            lambda img, depth: transformer.transform_add_background(img, depth, color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.transform_add_background_noise(img, depth, img_noise_range=(0, 255)),
         ],
         test_transforms=[
-            lambda img, depth: transformer.transform_add_background(img, depth, color_range=(0, 255, 255)),
-            lambda img, depth: transformer.transform_add_noise(img, depth, img_noise_range=(100, 255), depth_noise_range=(0, 1)),
+            lambda img, depth: transformer.transform_add_background(img, depth, color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.transform_add_background_noise(img, depth, img_noise_range=(150, 255)),
         ]
     )
-
-
-##################### MNIST with background ######################
-location_MNIST_background = location + "MNIST_with_background_select/"
 
 ########################## RGBD example ##########################
 
 # Load the dataset
-train_image_file = location_MNIST_background + "train_images.npy"
-train_label_file = location_MNIST_background + "train_labels.npy"
-test_image_file = location_MNIST_background + "test_images.npy"
-test_label_file = location_MNIST_background + "test_labels.npy"
+train_image_file = test_location + "train_images.npy"
+train_label_file = test_location + "train_labels.npy"
+test_image_file = test_location + "test_images.npy"
+test_label_file = test_location + "test_labels.npy"
 
 train_dataset = TensorDataset(
     torch.tensor(np.load(train_image_file), dtype=torch.float32).to(device), 
     torch.tensor(np.load(train_label_file), dtype=torch.long).to(device)  # Change dtype to torch.long
 )
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+
 test_dataset = TensorDataset(
     torch.tensor(np.load(test_image_file), dtype=torch.float32).to(device), 
     torch.tensor(np.load(test_label_file), dtype=torch.long).to(device)  # Change dtype to torch.long
@@ -108,12 +102,17 @@ def reset_model():
 
     return rgbd_model, rgb_model, criterion, rgbd_optimizer, rgb_optimizer
 
+# Evaluate the model
+predictions = []
+
+max_data_size = 100
+
 # Reset the model before each data size iteration
-for data_size in range(50):
+for data_size in range(1, max_data_size):
     rgbd_model, rgb_model, criterion, rgbd_optimizer, rgb_optimizer = reset_model()
 
     train_loader = DataLoader(train_dataset, batch_size=64, shuffle=False, 
-                              sampler=SubsetRandomSampler(range(int((data_size/50) * len(train_dataset)))))
+                              sampler=SubsetRandomSampler(range(int((data_size/max_data_size) * len(train_dataset)))))
 
     # Continue with the rest of the code...
     for batch_idx, (data, targets) in enumerate(train_loader):
@@ -122,8 +121,8 @@ for data_size in range(50):
         rgbd_optimizer.zero_grad()
         rgb_optimizer.zero_grad()
 
-        x = data[:, :, :, :3].permute(0, 3, 1, 2) / 255.0
-        depth = data[:, :, :, 3:4].permute(0, 3, 1, 2) / 255.0
+        x = data[:, :, :, :3].permute(0, 3, 1, 2)
+        depth = data[:, :, :, 3:4].permute(0, 3, 1, 2)
         fake_depth = torch.ones_like(depth)
 
         camera_params['intrinsic']['fx'] = torch.ones((data.shape[0], 1, 1)).to(device) * 500
@@ -142,9 +141,6 @@ for data_size in range(50):
         if (batch_idx + 1) % 100 == 0:
             print(f'Step [{batch_idx+1}/{len(train_loader)}], rgb loss: {rgb_loss.item():.4f}, rgbd loss: {rgbd_loss.item():.4f}')
 
-    # Evaluate the model
-    predictions = []
-
     rgbd_model.eval()
     rgb_model.eval()
     with torch.no_grad():
@@ -155,8 +151,8 @@ for data_size in range(50):
             data = data.to(device)
             targets = targets.to(device)
 
-            x = data[:, :, :, :3].permute(0, 3, 1, 2) / 255.0
-            depth = data[:, :, :, 3:4].permute(0, 3, 1, 2) / 255.0
+            x = data[:, :, :, :3].permute(0, 3, 1, 2)
+            depth = data[:, :, :, 3:4].permute(0, 3, 1, 2)
             fake_depth = torch.ones_like(depth)
 
             camera_params['intrinsic']['fx'] = torch.ones((data.shape[0], 1, 1)).to(device) * 500
@@ -182,7 +178,7 @@ for data_size in range(50):
         rgb_accuracy = 100 * rgb_correct / total
         print(f'Test RGBD Accuracy: {rgbd_accuracy:.2f}%')
         print(f'Test RGB Accuracy: {rgb_accuracy:.2f}%')
-        print(f"Data size: {data_size/50 * 100}%")
+        print(f"Data size: {data_size/max_data_size * 100}%")
 
         rgbd_accuracy_list.append(rgbd_accuracy)
         rgb_accuracy_list.append(rgb_accuracy)
@@ -190,7 +186,7 @@ for data_size in range(50):
 
 # Plot the accuracy over epochs
 if plotting:
-    x_values = [i*2 for i in range(len(rgbd_accuracy_list))]
+    x_values = [i*(100 // max_data_size) for i in range(len(rgbd_accuracy_list))]
     plt.plot(x_values, rgbd_accuracy_list, label="RGBD")
     plt.plot(x_values, rgb_accuracy_list, label="RGB")
     plt.ylabel("Accuracy")
@@ -202,34 +198,14 @@ if plotting:
 
 # Plot the predictions
 if plotting:
-    for x in range(10):
-        fig, ax = plt.subplots(5, 5, figsize=(20, 20))
-        fig.suptitle('Predictions', fontsize=20)
-        for i in range(5):
-            for j in range(5):
-                image = predictions[x]["image"][i+5*j][:, :, :3]
-                image = (image - image.min()) / (image.max() - image.min())  # Normalize image
-                ax[i, j].imshow(image)
-                ax[i, j].set_title(f"Label: {predictions[x]['label'][i+5*j]}\nRGBD Prediction: {predictions[x]['rgbd_prediction'][i+5*j]}\nRGB Prediction: {predictions[x]['rgb_prediction'][i+5*j]}")
-                ax[i, j].axis('off')
+    fig, ax = plt.subplots(5, 5, figsize=(20, 20))
+    fig.suptitle('Predictions', fontsize=20)
+    for i in range(5):
+        for j in range(5):
+            image = predictions[0]["image"][i+5*j][:, :, :3]
+            image = (image - image.min()) / (image.max() - image.min())  # Normalize image
+            ax[i, j].imshow(image)
+            ax[i, j].set_title(f"Label: {predictions[x]['label'][i+5*j]}\nRGBD Prediction: {predictions[x]['rgbd_prediction'][i+5*j]}\nRGB Prediction: {predictions[x]['rgb_prediction'][i+5*j]}")
+            ax[i, j].axis('off')
 
-        plt.show()
-    plt.ylabel("Accuracy")
-    plt.title("Accuracy of a RGBD and RGB classifier on MNIST with random background colors")
-    plt.legend()
     plt.show()
-
-# Plot the predictions
-if plotting:
-    for x in range(10):
-        fig, ax = plt.subplots(5, 5, figsize=(20, 20))
-        fig.suptitle('Predictions', fontsize=20)
-        for i in range(5):
-            for j in range(5):
-                image = predictions[x]["image"][i+5*j][:, :, :3]
-                image = (image - image.min()) / (image.max() - image.min())  # Normalize image
-                ax[i, j].imshow(image)
-                ax[i, j].set_title(f"Label: {predictions[x]['label'][i+5*j]}\nRGBD Prediction: {predictions[x]['rgbd_prediction'][i+5*j]}\nRGB Prediction: {predictions[x]['rgb_prediction'][i+5*j]}")
-                ax[i, j].axis('off')
-
-        plt.show()
