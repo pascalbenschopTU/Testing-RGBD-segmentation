@@ -15,7 +15,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Specify the folder where you want to save the dataset
 data_location = "../../data/"
-test_location = data_location + "MNIST_with_background/"
+experiment_name = "MNIST"
+test_location = data_location + experiment_name + "/"
 
 ##################### Constants ######################
 data_creation = True
@@ -33,11 +34,11 @@ if data_creation:
     transformer.create_rgbd_MNIST_with_background(
         test_location, 
         train_transforms=[
-            lambda img, depth: transformer.transform_add_background(img, depth, color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.transform_add_background(img, depth, color_range=(255, 255, 255)),
             # lambda img, depth: transformer.transform_add_background_noise(img, depth, img_noise_range=(0, 255)),
         ],
         test_transforms=[
-            lambda img, depth: transformer.transform_add_background(img, depth, color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.transform_add_background(img, depth, color_range=(255, 255, 255)),
             # lambda img, depth: transformer.transform_add_background_noise(img, depth, img_noise_range=(150, 255)),
         ]
     )
@@ -191,9 +192,10 @@ if plotting:
     plt.plot(x_values, rgb_accuracy_list, label="RGB")
     plt.ylabel("Accuracy")
     plt.xlabel("Data size (percentage)")
-    plt.title("Accuracy of a RGBD and RGB classifier on MNIST with random background colors")
+    plt.title("Accuracy of a RGBD and RGB classifier on MNIST")
     plt.legend()
     plt.xlim(0, 100)
+    plt.savefig(test_location + "results.png")
     plt.show()
 
 # Plot the predictions

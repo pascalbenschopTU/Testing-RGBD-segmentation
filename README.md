@@ -1,4 +1,6 @@
-# MscPascalBenschop
+# MscPascalBenschop: Why is Depth useful for Computer Vision?
+
+Repository for the master thesis project of Pascal Benschop. 
 
 ## Setup
 Download and install conda.
@@ -10,7 +12,13 @@ Download and install conda.
 Go to `code/src/MNIST` and run ```python main.py``` 
 
 
-## Name
+## Sources
+
+
+[2.5 Malleable Convolution](https://github.com/charlesCXK/RGBD_Semantic_Segmentation_PyTorch)
+
+
+<!-- ## Name
 Choose a self-explaining name for your project.
 
 ## Description
@@ -48,4 +56,4 @@ Show your appreciation to those who have contributed to the project.
 For open source projects, say how it is licensed.
 
 ## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers. -->
