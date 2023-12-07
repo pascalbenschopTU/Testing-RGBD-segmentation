@@ -12,10 +12,11 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 # Set the device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Device: {device}")
 
 # Specify the folder where you want to save the dataset
 data_location = "../../data/"
-experiment_name = "MNIST"
+experiment_name = "MNIST_occlusion/"
 test_location = data_location + experiment_name + "/"
 
 ##################### Constants ######################
@@ -34,12 +35,14 @@ if data_creation:
     transformer.create_rgbd_MNIST_with_background(
         test_location, 
         train_transforms=[
-            # lambda img, depth: transformer.transform_add_background(img, depth, color_range=(255, 255, 255)),
-            # lambda img, depth: transformer.transform_add_background_noise(img, depth, img_noise_range=(0, 255)),
+            lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.add_background_noise(img, depth, img_noise_range=(0, 255)),
+            lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
         ],
         test_transforms=[
-            # lambda img, depth: transformer.transform_add_background(img, depth, color_range=(255, 255, 255)),
-            # lambda img, depth: transformer.transform_add_background_noise(img, depth, img_noise_range=(150, 255)),
+            lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.add_background_noise(img, depth, img_noise_range=(150, 255)),
+            lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
         ]
     )
 
@@ -60,7 +63,7 @@ test_dataset = TensorDataset(
     torch.tensor(np.load(test_image_file), dtype=torch.float32).to(device), 
     torch.tensor(np.load(test_label_file), dtype=torch.long).to(device)  # Change dtype to torch.long
 )
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
 
 # Specify parameters
 image_width = 28
@@ -112,7 +115,7 @@ max_data_size = 100
 for data_size in range(1, max_data_size):
     rgbd_model, rgb_model, criterion, rgbd_optimizer, rgb_optimizer = reset_model()
 
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=False, 
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=False, 
                               sampler=SubsetRandomSampler(range(int((data_size/max_data_size) * len(train_dataset)))))
 
     # Continue with the rest of the code...
@@ -168,12 +171,13 @@ for data_size in range(1, max_data_size):
             rgbd_correct += (rgbd_predicted == targets).sum().item()
             rgb_correct += (rgb_predicted == targets).sum().item()
 
-            predictions.append({
-                "image": data.cpu().numpy(),
-                "label": targets.cpu().numpy(),
-                "rgbd_prediction": rgbd_predicted.cpu().numpy(),
-                "rgb_prediction": rgb_predicted.cpu().numpy()
-            })
+            if data_size == max_data_size - 1:
+                predictions.append({
+                    "image": data.cpu().numpy(),
+                    "label": targets.cpu().numpy(),
+                    "rgbd_prediction": rgbd_predicted.cpu().numpy(),
+                    "rgb_prediction": rgb_predicted.cpu().numpy()
+                })
 
         rgbd_accuracy = 100 * rgbd_correct / total
         rgb_accuracy = 100 * rgb_correct / total
@@ -192,7 +196,7 @@ if plotting:
     plt.plot(x_values, rgb_accuracy_list, label="RGB")
     plt.ylabel("Accuracy")
     plt.xlabel("Data size (percentage)")
-    plt.title("Accuracy of a RGBD and RGB classifier on MNIST")
+    plt.title("Accuracy of a RGBD and RGB classifier on different data sizes")
     plt.legend()
     plt.xlim(0, 100)
     plt.savefig(test_location + "results.png")
@@ -204,10 +208,10 @@ if plotting:
     fig.suptitle('Predictions', fontsize=20)
     for i in range(5):
         for j in range(5):
-            image = predictions[0]["image"][i+5*j][:, :, :3]
+            image = predictions[-1]["image"][i+5*j][:, :, :3]
             image = (image - image.min()) / (image.max() - image.min())  # Normalize image
             ax[i, j].imshow(image)
-            ax[i, j].set_title(f"Label: {predictions[x]['label'][i+5*j]}\nRGBD Prediction: {predictions[x]['rgbd_prediction'][i+5*j]}\nRGB Prediction: {predictions[x]['rgb_prediction'][i+5*j]}")
+            ax[i, j].set_title(f"Label: {predictions[-1]['label'][i+5*j]}\nRGBD Prediction: {predictions[-1]['rgbd_prediction'][i+5*j]}\nRGB Prediction: {predictions[-1]['rgb_prediction'][i+5*j]}")
             ax[i, j].axis('off')
 
     plt.show()

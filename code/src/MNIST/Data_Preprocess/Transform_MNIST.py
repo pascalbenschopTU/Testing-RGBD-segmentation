@@ -72,20 +72,20 @@ class MNIST_Transformer:
         return (img - np.min(img)) / (np.max(img) - np.min(img))
 
 
-    def transform_add_background(self, img, depth, color_range=(255, 255, 255)):
+    def add_background(self, img, depth, color_range=(255, 255, 255)):
         new_img = np.zeros_like(img)
         # Add a random background to the image
-        background_color = [
+        background_color = np.array([
             np.random.randint(0, max(1, color_range[0])), 
             np.random.randint(0, max(1, color_range[1])), 
             np.random.randint(0, max(1, color_range[2]))
-        ]
-        background_img = np.ones_like(img[:, :, :3]) * background_color
-        new_img = np.where(img == 0, self.normalize_image(background_img), img)
+        ])
+        background_img = np.ones_like(img[:, :, :3]) * (background_color / 255.0)
+        new_img = np.where(img == 0, background_img, img)
         # Keep depth the same
         return new_img, depth
     
-    def transform_add_noise(self, img, depth, img_noise_range=(0, 255), depth_noise_range=(0, 255)):
+    def add_noise(self, img, depth, img_noise_range=(0, 255), depth_noise_range=(0, 255)):
         new_img = np.zeros_like(img)
         # Add noise to the image
         img_noise = np.random.randint(img_noise_range[0], np.max([1, img_noise_range[1]]), new_img.shape)
@@ -96,7 +96,7 @@ class MNIST_Transformer:
         
         return new_img, new_depth
     
-    def transform_add_background_noise(self, img, depth, img_noise_range=(0, 255)):
+    def add_background_noise(self, img, depth, img_noise_range=(0, 255)):
         new_img = np.zeros_like(img)
         mask = depth == 1.0
         mask_rgb = np.repeat(mask, 3, axis=-1).reshape(img.shape)
@@ -105,5 +105,40 @@ class MNIST_Transformer:
         # Add noise to the image based on depth
         new_img = np.where(mask_rgb, self.normalize_image(img + img_noise), img)
         new_depth = np.where(mask, self.normalize_image(depth + np.mean(img_noise, axis=-1)), depth)
+
+        return new_img, new_depth
+    
+    def add_occlusion(self, img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)):
+        new_img = self.normalize_image(img)
+        new_depth = self.normalize_image(depth)
+
+        occlusion_size = np.random.randint(occlusion_size[0], occlusion_size[1])
+
+        H, W, C = img.shape
+        random_x = np.random.randint(0, W - occlusion_size)
+        random_y = np.random.randint(0, H - occlusion_size)
+
+        center_x = occlusion_size // 2
+        center_y = occlusion_size // 2
+
+        # Calculate the distance from each point to the center
+        y, x = np.ogrid[:occlusion_size, :occlusion_size]
+        distance = np.sqrt((y - center_y) ** 2 + (x - center_x) ** 2)
+        normalized_distance = distance / np.max(distance)
+        occlusion_depth = normalized_distance
+        occlusion_img = 1.0 - normalized_distance
+
+        occlusion_color = np.array([
+            np.random.randint(0, max(1, occlusion_color_range[0])), 
+            np.random.randint(0, max(1, occlusion_color_range[1])), 
+            np.random.randint(0, max(1, occlusion_color_range[2]))
+        ])
+
+        occlusion_img = occlusion_img.repeat(C).reshape((occlusion_size, occlusion_size, C))
+        occlusion_img *= (occlusion_color / 255.0)
+
+        # Apply the occlusion mask to the image and depth
+        new_img[random_y:random_y + occlusion_size, random_x:random_x + occlusion_size, :] = occlusion_img
+        new_depth[random_y:random_y + occlusion_size, random_x:random_x + occlusion_size] = occlusion_depth
 
         return new_img, new_depth
