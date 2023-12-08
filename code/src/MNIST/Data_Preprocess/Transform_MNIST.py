@@ -86,6 +86,30 @@ class MNIST_Transformer:
         # Keep depth the same
         return new_img, depth
     
+    def add_background_gradient(self, img, depth, color_range=(255, 255, 255)):
+        new_img = np.zeros_like(img)
+        # Add a random background to the image
+        background_color = np.array([
+            np.random.randint(0, max(1, color_range[0])), 
+            np.random.randint(0, max(1, color_range[1])), 
+            np.random.randint(0, max(1, color_range[2]))
+        ])
+        background_img = np.ones_like(img[:, :, :3]) * (background_color / 255.0)
+
+        # Create a gradient
+        gradient1 = np.linspace(np.random.rand(), 1, img.shape[0])
+        gradient2 = np.linspace(np.random.rand(), 1, img.shape[1])
+        gradient = np.outer(gradient1, gradient2)
+        gradient = np.repeat(gradient, 3).reshape(img.shape)
+        # Rotate the gradient
+        gradient = np.rot90(gradient, k=np.random.randint(0, 4))
+        background_img = background_img * gradient
+
+        new_img = np.where(img == 0, background_img, img)
+        # Keep depth the same
+        return new_img, depth
+
+    
     def add_noise(self, img, depth, img_noise_range=(0, 255), depth_noise_range=(0, 255)):
         new_img = np.zeros_like(img)
         # Add noise to the image

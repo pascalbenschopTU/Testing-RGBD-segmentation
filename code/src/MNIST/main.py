@@ -16,7 +16,7 @@ print(f"Device: {device}")
 
 # Specify the folder where you want to save the dataset
 data_location = "../../data/"
-experiment_name = "MNIST_occlusion_multiple"
+experiment_name = "MNIST_gradient_background"
 test_location = data_location + experiment_name + "/"
 
 ##################### Constants ######################
@@ -35,16 +35,18 @@ if data_creation:
     transformer.create_rgbd_MNIST_with_background(
         test_location, 
         train_transforms=[
-            lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
+            lambda img, depth: transformer.add_background_gradient(img, depth, color_range=(255, 255, 255)),
             # lambda img, depth: transformer.add_background_noise(img, depth, img_noise_range=(0, 255)),
-            lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
-            lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 15), occlusion_color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 15), occlusion_color_range=(255, 255, 255)),
         ],
         test_transforms=[
-            lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
+            lambda img, depth: transformer.add_background_gradient(img, depth, color_range=(255, 255, 255)),
             # lambda img, depth: transformer.add_background_noise(img, depth, img_noise_range=(150, 255)),
-            lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
-            lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 15), occlusion_color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 15), occlusion_color_range=(255, 255, 255)),
         ]
     )
 
