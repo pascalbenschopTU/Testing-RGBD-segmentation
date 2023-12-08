@@ -16,7 +16,7 @@ print(f"Device: {device}")
 
 # Specify the folder where you want to save the dataset
 data_location = "../../data/"
-experiment_name = "MNIST_occlusion/"
+experiment_name = "MNIST_occlusion_multiple"
 test_location = data_location + experiment_name + "/"
 
 ##################### Constants ######################
@@ -38,11 +38,13 @@ if data_creation:
             lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
             # lambda img, depth: transformer.add_background_noise(img, depth, img_noise_range=(0, 255)),
             lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
+            lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 15), occlusion_color_range=(255, 255, 255)),
         ],
         test_transforms=[
             lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
             # lambda img, depth: transformer.add_background_noise(img, depth, img_noise_range=(150, 255)),
             lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
+            lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 15), occlusion_color_range=(255, 255, 255)),
         ]
     )
 
@@ -112,7 +114,7 @@ predictions = []
 max_data_size = 100
 
 # Reset the model before each data size iteration
-for data_size in range(1, max_data_size):
+for data_size in range(1, max_data_size + 1):
     rgbd_model, rgb_model, criterion, rgbd_optimizer, rgb_optimizer = reset_model()
 
     train_loader = DataLoader(train_dataset, batch_size=128, shuffle=False, 
@@ -171,7 +173,7 @@ for data_size in range(1, max_data_size):
             rgbd_correct += (rgbd_predicted == targets).sum().item()
             rgb_correct += (rgb_predicted == targets).sum().item()
 
-            if data_size == max_data_size - 1:
+            if data_size / max_data_size > 0.9:
                 predictions.append({
                     "image": data.cpu().numpy(),
                     "label": targets.cpu().numpy(),
@@ -201,17 +203,23 @@ if plotting:
     plt.xlim(0, 100)
     plt.savefig(test_location + "results.png")
     plt.show()
+    
 
 # Plot the predictions
 if plotting:
+    prediction_index = 0
     fig, ax = plt.subplots(5, 5, figsize=(20, 20))
     fig.suptitle('Predictions', fontsize=20)
     for i in range(5):
         for j in range(5):
-            image = predictions[-1]["image"][i+5*j][:, :, :3]
+            image = predictions[prediction_index]["image"][i+5*j][:, :, :3]
             image = (image - image.min()) / (image.max() - image.min())  # Normalize image
             ax[i, j].imshow(image)
-            ax[i, j].set_title(f"Label: {predictions[-1]['label'][i+5*j]}\nRGBD Prediction: {predictions[-1]['rgbd_prediction'][i+5*j]}\nRGB Prediction: {predictions[-1]['rgb_prediction'][i+5*j]}")
+
+            label = predictions[prediction_index]['label'][i+5*j]
+            rgbd_prediction = predictions[prediction_index]['rgbd_prediction'][i+5*j]
+            rgb_prediction = predictions[prediction_index]['rgb_prediction'][i+5*j]
+            ax[i, j].set_title(f"Label: {label}\nRGBD Prediction: {rgbd_prediction}\nRGB Prediction: {rgb_prediction}")
             ax[i, j].axis('off')
 
     plt.show()

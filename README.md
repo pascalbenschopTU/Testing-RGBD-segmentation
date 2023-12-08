@@ -6,6 +6,7 @@ Repository for the master thesis project of Pascal Benschop.
 Download and install conda.
 
 `conda env create -f .\environment.yaml`
+
 `conda activate python_environment`
 
 ## Running

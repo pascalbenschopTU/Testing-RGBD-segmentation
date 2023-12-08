@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import cv2
 
 class MNIST_Transformer:
     # Create a set of parameters for the transformer
@@ -124,21 +125,32 @@ class MNIST_Transformer:
         # Calculate the distance from each point to the center
         y, x = np.ogrid[:occlusion_size, :occlusion_size]
         distance = np.sqrt((y - center_y) ** 2 + (x - center_x) ** 2)
-        normalized_distance = distance / np.max(distance)
-        occlusion_depth = normalized_distance
-        occlusion_img = 1.0 - normalized_distance
+        normalized_distance_from_center = distance / np.max(distance)
+        occlusion_patch = 1.0 - normalized_distance_from_center
 
         occlusion_color = np.array([
             np.random.randint(0, max(1, occlusion_color_range[0])), 
             np.random.randint(0, max(1, occlusion_color_range[1])), 
             np.random.randint(0, max(1, occlusion_color_range[2]))
         ])
-
-        occlusion_img = occlusion_img.repeat(C).reshape((occlusion_size, occlusion_size, C))
-        occlusion_img *= (occlusion_color / 255.0)
+        # 
+        occlusion_color_patch = occlusion_patch.repeat(C).reshape((occlusion_size, occlusion_size, C))
+        occlusion_color_patch *= (occlusion_color / 255.0)
 
         # Apply the occlusion mask to the image and depth
-        new_img[random_y:random_y + occlusion_size, random_x:random_x + occlusion_size, :] = occlusion_img
-        new_depth[random_y:random_y + occlusion_size, random_x:random_x + occlusion_size] = occlusion_depth
+        new_img[random_y:random_y + occlusion_size, random_x:random_x + occlusion_size, :] = occlusion_color_patch
+        # Get a mask for the occlusion region
+        occlusion_mask = np.zeros_like(depth)
+        occlusion_mask[random_y:random_y + occlusion_size, random_x:random_x + occlusion_size][occlusion_patch < 0.5] = 1
+        occlusion_mask = np.array(occlusion_mask, dtype=np.uint8)
+        new_img = np.array(new_img * 255, dtype=np.uint8)
+
+        # Inpaint the occlusion region
+        new_img = cv2.inpaint(new_img, occlusion_mask, inpaintRadius=5, flags=cv2.INPAINT_TELEA)
+        new_img = np.array(new_img / 255.0, dtype=np.float32)
+
+        # Apply the occlusion to the depth
+        new_depth[random_y:random_y + occlusion_size, random_x:random_x + occlusion_size] -= 2.0 * occlusion_patch
+        new_depth = self.normalize_image(new_depth)
 
         return new_img, new_depth
