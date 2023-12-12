@@ -6,6 +6,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 from Network.RGBD_classification_network import RGBDClassifier
+from Network.RGBD_classification_smart_network import SmartRGBDClassifier
 from Data_Preprocess.Transform_MNIST import MNIST_Transformer
 from Data_Preprocess.Download_MNIST import download_MNIST_data
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -16,7 +17,7 @@ print(f"Device: {device}")
 
 # Specify the folder where you want to save the dataset
 data_location = "../../data/"
-experiment_name = "MNIST_gradient_background"
+experiment_name = "MNIST_occlusion_color_background_smart_network"
 test_location = data_location + experiment_name + "/"
 
 ##################### Constants ######################
@@ -35,17 +36,17 @@ if data_creation:
     transformer.create_rgbd_MNIST_with_background(
         test_location, 
         train_transforms=[
-            # lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
-            lambda img, depth: transformer.add_background_gradient(img, depth, color_range=(255, 255, 255)),
+            lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.add_background_gradient(img, depth, color_range=(255, 255, 255)),
             # lambda img, depth: transformer.add_background_noise(img, depth, img_noise_range=(0, 255)),
-            # lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
+            lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
             # lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 15), occlusion_color_range=(255, 255, 255)),
         ],
         test_transforms=[
-            # lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
-            lambda img, depth: transformer.add_background_gradient(img, depth, color_range=(255, 255, 255)),
+            lambda img, depth: transformer.add_background(img, depth, color_range=(255, 255, 255)),
+            # lambda img, depth: transformer.add_background_gradient(img, depth, color_range=(255, 255, 255)),
             # lambda img, depth: transformer.add_background_noise(img, depth, img_noise_range=(150, 255)),
-            # lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
+            lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 10), occlusion_color_range=(255, 255, 255)),
             # lambda img, depth: transformer.add_occlusion(img, depth, occlusion_size=(5, 15), occlusion_color_range=(255, 255, 255)),
         ]
     )
@@ -99,7 +100,8 @@ rgbd_accuracy_list = []
 # Train the model
 def reset_model():
     # Create the neural network model
-    rgbd_model = RGBDClassifier(image_width=image_width, image_height=image_height).to(device)
+    # rgbd_model = RGBDClassifier(image_width=image_width, image_height=image_height).to(device)
+    rgbd_model = SmartRGBDClassifier(image_width=image_width, image_height=image_height).to(device)
     rgb_model = RGBDClassifier(image_width=image_width, image_height=image_height).to(device)
 
     # Define the loss function and optimizer
