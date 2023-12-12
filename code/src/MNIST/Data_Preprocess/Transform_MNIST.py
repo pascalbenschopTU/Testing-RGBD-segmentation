@@ -5,13 +5,14 @@ import cv2
 
 class MNIST_Transformer:
     # Create a set of parameters for the transformer
-    def __init__(self, train_images, train_labels, test_images, test_labels):
+    def __init__(self, train_images, train_labels, test_images, test_labels, image_size=(28, 28)):
         self.train_images = train_images
         self.train_labels = train_labels
         self.test_images = test_images
         self.test_labels = test_labels
+        self.image_size = image_size
 
-    def create_rgbd_MNIST_with_background(self, save_folder, train_transforms=[], test_transforms=[]):
+    def create_rgbd_MNIST_with_transforms(self, save_folder, train_transforms=[], test_transforms=[]):
         # Create save folder if not exists
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
@@ -28,28 +29,30 @@ class MNIST_Transformer:
 
         samples = 25
 
+        (H, W) = self.image_size
         for i, img in enumerate(self.train_images):
-            H, W = img.shape
-            new_img = self.normalize_image(np.repeat(img, 3, axis=-1).reshape((H, W, 3)))
+            img = cv2.resize(np.array(img), (W, H))
+            new_img = self.normalize_image(np.repeat(img, 3, axis=-1).reshape((W, H, 3)))
             new_depth = self.normalize_image(np.array(255.0 - img))
 
             for transform in train_transforms:
                 new_img, new_depth = transform(new_img, new_depth)
 
-            train_images.append(np.concatenate((new_img, new_depth.reshape((H, W, 1))), axis=-1))
+            train_images.append(np.concatenate((new_img, new_depth.reshape((W, H, 1))), axis=-1))
 
             if i < samples:
                 plt.imsave(save_folder + "train_images/" + str(i) + ".png", new_img)
                 plt.imsave(save_folder + "train_images/" + str(i) + "_depth.png", new_depth, cmap="gray")
 
         for i, img in enumerate(self.test_images):
-            new_img = self.normalize_image(np.repeat(img, 3, axis=-1).reshape((H, W, 3)))
+            img = cv2.resize(np.array(img), (W, H))
+            new_img = self.normalize_image(np.repeat(img, 3, axis=-1).reshape((W, H, 3)))
             new_depth = self.normalize_image(np.array(255.0 - img))
 
             for transform in test_transforms:
                 new_img, new_depth = transform(new_img, new_depth)
 
-            test_images.append(np.concatenate((new_img, new_depth.reshape((H, W, 1))), axis=-1))
+            test_images.append(np.concatenate((new_img, new_depth.reshape((W, H, 1))), axis=-1))
 
             if i < samples:
                 plt.imsave(save_folder + "test_images/" + str(i) + ".png", new_img)
@@ -57,10 +60,10 @@ class MNIST_Transformer:
 
         
         # Save the dataset as a numpy array
-        np.save(save_folder + "train_images.npy", train_images)
-        np.save(save_folder + "train_labels.npy", self.train_labels)
-        np.save(save_folder + "test_images.npy", test_images)
-        np.save(save_folder + "test_labels.npy", self.test_labels)
+        np.savez_compressed(save_folder + "train_images.npz", train_images)
+        np.savez_compressed(save_folder + "train_labels.npz", self.train_labels)
+        np.savez_compressed(save_folder + "test_images.npz", test_images)
+        np.savez_compressed(save_folder + "test_labels.npz", self.test_labels)
 
     def normalize_image(self, img):
         # Make sure img is a numpy array
@@ -83,6 +86,7 @@ class MNIST_Transformer:
         ])
         background_img = np.ones_like(img[:, :, :3]) * (background_color / 255.0)
         new_img = np.where(img == 0, background_img, img)
+
         # Keep depth the same
         return new_img, depth
     
@@ -97,8 +101,9 @@ class MNIST_Transformer:
         background_img = np.ones_like(img[:, :, :3]) * (background_color / 255.0)
 
         # Create a gradient
-        gradient1 = np.linspace(np.random.rand(), 1, img.shape[0])
-        gradient2 = np.linspace(np.random.rand(), 1, img.shape[1])
+        random_direction = np.random.rand(2)
+        gradient1 = np.linspace(random_direction[0], 1.0 - random_direction[0], img.shape[0])
+        gradient2 = np.linspace(1.0 - random_direction[1], random_direction[1], img.shape[1])
         gradient = np.outer(gradient1, gradient2)
         gradient = np.repeat(gradient, 3).reshape(img.shape)
         # Rotate the gradient
@@ -176,5 +181,36 @@ class MNIST_Transformer:
         # Apply the occlusion to the depth
         new_depth[random_y:random_y + occlusion_size, random_x:random_x + occlusion_size] -= 2.0 * occlusion_patch
         new_depth = self.normalize_image(new_depth)
+
+        return new_img, new_depth
+    
+    def scale_and_place(self, img, depth, scale_range=(0.5, 1.0), placement_range=(0.0, 0.5)):
+        new_img = np.zeros_like(img)
+        new_depth = np.ones_like(depth)
+
+        scale = np.random.uniform(scale_range[0], scale_range[1])
+        placement = np.random.uniform(placement_range[0], placement_range[1], 2)
+
+        H, W, C = img.shape
+        new_H = int(H * scale)
+        new_W = int(W * scale)
+
+        # Resize the image and depth
+        img = cv2.resize(img, (new_W, new_H))
+        depth = cv2.resize(depth, (new_W, new_H))
+
+        # Place the image and depth
+        placement_x = int(W * placement[0])
+        placement_y = int(H * placement[1])
+
+        if placement_x + new_W > W:
+            placement_x = W - new_W
+        if placement_y + new_H > H:
+            placement_y = H - new_H
+
+        new_img[placement_y:placement_y + new_H, placement_x:placement_x + new_W, :] = img
+        new_depth[placement_y:placement_y + new_H, placement_x:placement_x + new_W] = depth
+
+        new_depth = np.clip(new_depth, (1.0 - scale), 1.0)
 
         return new_img, new_depth
