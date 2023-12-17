@@ -18,6 +18,9 @@ Go to `code/src/MNIST` and run ```python main.py```
 
 [2.5 Malleable Convolution](https://github.com/charlesCXK/RGBD_Semantic_Segmentation_PyTorch)
 
+training data?
+https://github.com/Barchid/RGBD-Seg/blob/master/train.py 
+
 
 <!-- ## Name
 Choose a self-explaining name for your project.

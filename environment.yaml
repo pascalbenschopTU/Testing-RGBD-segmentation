@@ -16,3 +16,4 @@ dependencies:
     - imutils==0.5.4
     - timm==0.6.12
     - einops==0.6.0
+    - scipy
