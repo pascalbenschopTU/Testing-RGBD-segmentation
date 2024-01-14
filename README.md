@@ -2,24 +2,56 @@
 
 Repository for the master thesis project of Pascal Benschop. 
 
+## SynthDet
+
 ## Setup
+
+clone SynthDet from unity: https://github.com/Unity-Technologies/SynthDet
+
+Activate conda environment:
+```
+conda env create -f SynthDet_environment.yml
+
+conda activate Synthdet_env
+```
+
+### Running
+
+Run simulations via Unity, enable depth labeler.
+
+Convert unity dataset in SOLO format to COCO format:
+```
+solo2coco path\to\UnityTechnologies\SynthDet\solo_x \code\data\SynthDet\
+```
+
+Add depth to COCO dataset
+```
+python convert_solo_depth_to_coco.py path\to\UnityTechnologies\SynthDet\solo_x \code\data\SynthDet\coco\depth
+```
+
+## MNIST
+
+### Setup
 Download and install conda.
 
 `conda env create -f .\environment.yaml`
 
 `conda activate python_environment`
 
-## Running
+### Running
 Go to `code/src/MNIST` and run ```python main.py``` 
 
 
-## Sources
+### Sources
 
 
 [2.5 Malleable Convolution](https://github.com/charlesCXK/RGBD_Semantic_Segmentation_PyTorch)
 
 training data?
 https://github.com/Barchid/RGBD-Seg/blob/master/train.py 
+
+
+
 
 
 <!-- ## Name
