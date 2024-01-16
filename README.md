@@ -29,6 +29,21 @@ Add depth to COCO dataset
 python convert_solo_depth_to_coco.py path\to\UnityTechnologies\SynthDet\solo_x \code\data\SynthDet\coco\depth
 ```
 
+#### DFormer
+
+```
+python convert_coco_to_dformer.py path\to\SynthDet\coco\ path\to\DFormer\datasets\SynthDet
+```
+
+Training - navigate to DFormer repo
+```
+conda env create -f dformer_environment.yaml
+
+conda activate dformer
+
+python .\utils\train.py --config=local_configs.SynthDet.SynthDet_DFormer_Tiny --gpus 1
+```
+
 ## MNIST
 
 ### Setup

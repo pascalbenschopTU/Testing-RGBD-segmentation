@@ -2,3 +2,5 @@ code/data/
 **/__pycache__/
 DFormer/
 SynthDet/
+logs/
+checkpoints/
