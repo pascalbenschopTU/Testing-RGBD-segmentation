@@ -97,8 +97,8 @@ def convert_dataset(dataset_root, save_location, image_size=(480, 480), dataset_
 
 def main():
     parser = argparse.ArgumentParser(description='Convert COCO dataset to DFormer dataset')
-    parser.add_argument('--dataset_root', type=str, help='Path to COCO dataset')
-    parser.add_argument('--save_location', type=str, help='Path to save the converted dataset')
+    parser.add_argument('dataset_root', help='Path to COCO dataset')
+    parser.add_argument('save_location', help='Path to save the converted dataset')
     args = parser.parse_args()
 
     convert_dataset(args.dataset_root, args.save_location)

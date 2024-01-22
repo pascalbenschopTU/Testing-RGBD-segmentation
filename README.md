@@ -19,20 +19,23 @@ conda activate Synthdet_env
 
 Run simulations via Unity, enable depth labeler.
 
+Navigate to Synthdet_Pascal
+
 Convert unity dataset in SOLO format to COCO format:
 ```
-solo2coco path\to\UnityTechnologies\SynthDet\solo_x \code\data\SynthDet\
+solo2coco path\to\UnityTechnologies\SynthDet\solo_x ..\data\SynthDet\
 ```
 
 Add depth to COCO dataset
 ```
-python convert_solo_depth_to_coco.py path\to\UnityTechnologies\SynthDet\solo_x \code\data\SynthDet\coco\depth
+python convert_solo_depth_to_coco.py path\to\UnityTechnologies\SynthDet\solo_x ..\data\SynthDet\coco\depth
 ```
 
 #### DFormer
 
+Inside SynthDet_Pascal
 ```
-python convert_coco_to_dformer.py path\to\SynthDet\coco\ path\to\DFormer\datasets\SynthDet
+python convert_coco_to_dformer.py ..\data\SynthDet\coco\ path\to\DFormer\datasets\SynthDet
 ```
 
 Training - navigate to DFormer repo
@@ -42,6 +45,20 @@ conda env create -f dformer_environment.yaml
 conda activate dformer
 
 python .\utils\train.py --config=local_configs.SynthDet.SynthDet_DFormer_Tiny --gpus 1
+
+local_configs.SynthDet.SynthDet2_DFormer_Tiny.py
+```
+
+Plotting the predictions:
+```
+cd ..\DFormer_Pascal
+
+python .\plot_predictions.py --dir_rgb ..\DFormer\checkpoints\SynthDet2_DFormer-Tiny_20240121-162131\ --dir_rgbd ..\DFormer\checkpoints\SynthDet2_DFormer-Tiny_20240121-130329\ --dir_dataset ..\DFormer\datasets\SynthDet2\
+```
+
+Plotting the accuracy:
+```
+python plot_accuracy.py --dir_rgb ..\DFormer\checkpoints\SynthDet2_DFormer-Tiny_20240121-162131\ --dir_rgbd ..\DFormer\checkpoints\SynthDet2_DFormer-Tiny_20240121-130329\
 ```
 
 ## MNIST
