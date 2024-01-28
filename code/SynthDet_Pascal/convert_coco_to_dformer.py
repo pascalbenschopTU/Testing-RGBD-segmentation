@@ -20,8 +20,8 @@ def convert_dataset(dataset_root, save_location, image_size=(480, 480), dataset_
     train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(len(dataset) * dataset_split[0]), int(len(dataset) * dataset_split[1])])
 
     # # Define data loaders
-    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=8)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=8)
 
     # Create directories to save the converted dataset
     os.makedirs(os.path.join(save_location, 'RGB'), exist_ok=True)

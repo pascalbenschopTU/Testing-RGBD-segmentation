@@ -16,7 +16,7 @@ def plot_predictions(dir_rgb, dir_rgbd, dir_dataset):
 
     # Load the target and prediction as numpy files
     pred_rgb_black_format = os.path.join(dir_rgb, "predictions", "pred_test_{}.npy")
-    pred_rgb_depth_format = os.path.join(dir_rgbd, "predictions", "pred_test_{}.npy")
+    pred_rgb_depth_format = os.path.join(dir_rgbd, "predictions", "pred_{}.npy")
 
     target_format = os.path.join(dir_dataset, "labels", "test_{}.png")
     depth_format = os.path.join(dir_dataset, "Depth", "test_{}.png")
@@ -28,6 +28,9 @@ def plot_predictions(dir_rgb, dir_rgbd, dir_dataset):
     for i in range(0, length_predictions):
         pred_rgb_black = np.load(pred_rgb_black_format.format(i), allow_pickle=True)
         pred_rgb_depth = np.load(pred_rgb_depth_format.format(i), allow_pickle=True)
+
+        # Add another dimension to pred_rgb_depth
+        pred_rgb_depth = np.expand_dims(pred_rgb_depth, axis=0)
 
         # Convert the prediction to RGB
         pred_rgb_black = convert_prediction_to_rgb(pred_rgb_black)
@@ -60,9 +63,11 @@ def plot_predictions(dir_rgb, dir_rgbd, dir_dataset):
         # get the colors of the values, according to the 
         values = np.unique(target.ravel())
         values = np.concatenate((values, np.unique(pred_rgb_black.ravel())))
-        values = np.concatenate((values, np.unique(pred_rgb_depth.ravel())))
+        # values = np.concatenate((values, np.unique(pred_rgb_depth.ravel())))
         values = np.unique(values)
         values = values[1:]
+
+        # print(len(values))
         
         # colormap used by imshow
         colors = [target_im.cmap(target_im.norm(value)) for value in values]

@@ -4,6 +4,7 @@ import cv2
 import OpenEXR
 import Imath
 import numpy as np
+from tqdm import tqdm
 
 def extract_depth_from_exr(exr_path):
     # Read the EXR file
@@ -41,6 +42,9 @@ def process_solo_dataset(input_folder, output_folder):
 
     directory_list = [f for f in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, f))]
 
+    # Initialize the progress bar
+    progress_bar = tqdm(total=len(directory_list), desc='Processing')
+
     for sequence_folder in directory_list:
         sequence_path = os.path.join(input_folder, sequence_folder)
 
@@ -50,8 +54,6 @@ def process_solo_dataset(input_folder, output_folder):
         # Find the depth EXR file
         exr_file_path = os.path.join(sequence_path, f"step0.camera.Depth.exr")
 
-        print(f"Processing {exr_file_path}")
-
         if os.path.isfile(exr_file_path):
             # Extract depth from EXR file
             depth_image = extract_depth_from_exr(exr_file_path)
@@ -59,6 +61,12 @@ def process_solo_dataset(input_folder, output_folder):
             # Save depth image as PNG in the specified output folder
             output_path = os.path.join(output_folder, f"depth_{sequence_digit}.png")
             save_depth_image(depth_image, output_path)
+
+        # Update the progress bar
+        progress_bar.update(1)
+
+    # Close the progress bar
+    progress_bar.close()
 
 
 def main():

@@ -3,10 +3,10 @@ import os
 from PIL import Image
 
 
-def change_dataset(dataset_location):
+def change_dataset(dataset_location, src_dir='Depth_original', dst_dir='Depth'):
     # Define the source and destination directories
-    src_dir = os.path.join(dataset_location, 'Depth_original')
-    dst_dir = os.path.join(dataset_location, 'Depth')
+    src_dir = os.path.join(dataset_location, src_dir)
+    dst_dir = os.path.join(dataset_location, dst_dir)
 
     # Create the destination directory if it doesn't exist
     os.makedirs(dst_dir, exist_ok=True)
@@ -32,6 +32,8 @@ def change_dataset(dataset_location):
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(description='Change the dataset')
     arg_parser.add_argument('--src', type=str, help='Path to the source directory of the dataset')
+    arg_parser.add_argument('--src_dir', type=str, help='Path to the source directory of the dataset', default='Depth_original')
+    arg_parser.add_argument('--dst_dir', type=str, help='Path to the destination directory of the dataset', default='Depth')
     args = arg_parser.parse_args()
 
-    change_dataset(args.src)
+    change_dataset(args.src, args.src_dir, args.dst_dir)
