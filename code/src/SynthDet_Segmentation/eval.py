@@ -50,14 +50,13 @@ def create_predictions(location, model, dataloader, config, device):
         modal_xs = modal_xs.to(device)
         labels = labels.to(device)
         B, H, W = labels.shape
-        scaled_logits = torch.zeros(B, n_classes, H, W).to(device)
 
         logits = model(images, modal_xs)
-        scaled_logits += logits.softmax(dim=1)
+        predictions = logits.softmax(dim=1)
 
         for j in range(B):
             current_index = i * config.batch_size + j
-            np.save(os.path.join(location, f"pred_{current_index}.npy"), scaled_logits[j].cpu().numpy())
+            np.save(os.path.join(location, f"pred_test_{current_index}.npy"), predictions[j].unsqueeze(0).cpu().numpy())
 
 
 class Metrics:
