@@ -47,6 +47,7 @@ def train(config, args):
     # Create the model
     model = SmallUNet(args.channels, N_CLASSES, criterion=torch.nn.CrossEntropyLoss(reduction='mean'))
     if config.pretrained_model is not None:
+        print('load pretrained model from ',config.pretrained_model)
         model.load_state_dict(torch.load(config.pretrained_model))
     else:
         # Initialize the weights
@@ -56,6 +57,8 @@ def train(config, args):
             elif isinstance(m, nn.BatchNorm2d):
                 init.ones_(m.weight)
                 init.zeros_(m.bias)
+
+
     # Create the optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
 

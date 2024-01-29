@@ -114,7 +114,7 @@ class SmallUNet(nn.Module):
         :param in_channels: number of channels in the input image
         :param out_channels: number of channels in the result feature map
         """
-        super().__init__()
+        super(SmallUNet, self).__init__()
 
         # Double convolution layers for the contracting path.
         # The number of features gets doubled at each step starting from $64$.

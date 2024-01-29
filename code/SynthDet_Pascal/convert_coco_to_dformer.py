@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from CocoDepthDataset import CocoDepthDataset
 from PIL import Image
 
-def convert_dataset(dataset_root, save_location, image_size=(480, 480), dataset_split=(0.5, 0.5)):
+def convert_dataset(dataset_root, save_location, image_size=(480, 480), dataset_split=(0.7, 0.3)):
 
     # Define data transformations
     transform = transforms.Compose([
@@ -99,6 +99,7 @@ def main():
     parser = argparse.ArgumentParser(description='Convert COCO dataset to DFormer dataset')
     parser.add_argument('dataset_root', help='Path to COCO dataset')
     parser.add_argument('save_location', help='Path to save the converted dataset')
+    parser.add_argument('--dataset_split', nargs=2, type=float, default=(0.7, 0.3), help='Train and test split')
     args = parser.parse_args()
 
     convert_dataset(args.dataset_root, args.save_location)

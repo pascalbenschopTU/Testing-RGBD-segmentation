@@ -63,13 +63,14 @@ def plot_predictions(dir_rgb, dir_rgbd, dir_dataset):
         values = np.concatenate((values, np.unique(pred_rgb_depth.ravel())))
         values = np.unique(values)
         values = values[1:]
-
-        # print(len(values))
+        
+        # Convert values to integers
+        values = values.astype(int)
         
         # colormap used by imshow
         colors = [target_im.cmap(target_im.norm(value)) for value in values]
         # create a patch (proxy artist) for every color 
-        patches = [mpatches.Patch(color=colors[j], label=f"{values[j]} " + class_names[values[j]]) for j in range(len(values)) ]
+        patches = [mpatches.Patch(color=colors[j], label=f"{values[j]} " + class_names[values[j]]) for j in range(len(values)) if values[j] < len(class_names)]
         # put those patched as legend-handles into the legend
         plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='best', borderaxespad=0.)
 
