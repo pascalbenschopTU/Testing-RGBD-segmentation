@@ -4,3 +4,4 @@ DFormer/
 SynthDet/
 logs/
 checkpoints/
+.vscode/

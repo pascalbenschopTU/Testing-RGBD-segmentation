@@ -168,11 +168,11 @@ def train(config, args):
                 torch.save(model.state_dict(), config.log_dir + '/checkpoint_epoch_{}_miou_{}.pth'.format(epoch, miou))
             print('miou',miou,'best',best_miou)
 
-            # TODO remove this back outside for loop
-            location = os.path.join(config.log_dir, "predictions")
-            pathlib.Path(location).mkdir(parents=True, exist_ok=True)
-            # Predict on the validation set
-            create_predictions(location, model, val_loader, config, device)
+    # TODO remove this back outside for loop
+    location = os.path.join(config.log_dir, "predictions")
+    pathlib.Path(location).mkdir(parents=True, exist_ok=True)
+    # Predict on the validation set
+    create_predictions(location, model, val_loader, config, device)
 
 
 

@@ -1,6 +1,0 @@
-{
-    "python.analysis.extraPaths": [
-        "./code/DFormer/utils/dataloader"
-    ],
-    "python.analysis.autoImportCompletions": true
-}
