@@ -17,11 +17,13 @@ def convert_dataset(dataset_root, save_location, image_size=(480, 480), dataset_
     dataset = CocoDepthDataset(os.path.join(dataset_root, 'images'), os.path.join(dataset_root, 'semantic.json'), os.path.join(dataset_root, 'depth'), transform=transform)
 
     # Split dataset into training and validation sets
-    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(len(dataset) * dataset_split[0]), int(len(dataset) * dataset_split[1])])
+    train_size = int(len(dataset) * dataset_split[0])
+    test_size = len(dataset) - train_size
+    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
     # # Define data loaders
-    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=8)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=16)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=16)
 
     # Create directories to save the converted dataset
     os.makedirs(os.path.join(save_location, 'RGB'), exist_ok=True)

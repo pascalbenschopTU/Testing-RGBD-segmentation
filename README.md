@@ -51,28 +51,12 @@ Navigate to DFormer repository
 python .\utils\train.py --config=local_configs.SynthDet.SynthDet_DFormer_Tiny --gpus 1
 ```
 
-Plotting the predictions:
-```
-cd ..\DFormer_Pascal
 
-python .\plot_predictions.py --dir_rgb ..\DFormer\checkpoints\SynthDet2_DFormer-Tiny_20240121-162131\ --dir_rgbd ..\DFormer\checkpoints\SynthDet2_DFormer-Tiny_20240121-130329\ --dir_dataset ..\DFormer\datasets\SynthDet2\
-
-python .\plot_predictions.py --dir_rgb ..\DFormer\checkpoints\SynthDet3_DFormer-Tiny_20240123-114720\ --dir_rgbd ..\DFormer\checkpoints\SynthDet3_DFormer-Tiny_20240124-081538\ --dir_dataset ..\DFormer\datasets\SynthDet3\
-
-python .\plot_predictions.py --dir_rgb ..\DFormer\checkpoints\SynthDet_default_DFormer-Tiny_20240124-122317\ --dir_rgbd ..\DFormer\checkpoints\SynthDet_default_DFormer-Tiny_20240124-143945\ --dir_dataset ..\DFormer\datasets\SynthDet_default\
-
-python .\plot_predictions.py --dir_rgb ..\DFormer\checkpoints\SynthDet_large_DFormer-Tiny_20240127-121104\ --dir_rgbd ..\src\SynthDet_Segmentation\checkpoints\SynthDet_large_Segmodel_20240128-145956\ --dir_dataset ..\DFormer\datasets\SynthDet_large\
-```
-
-Plotting the accuracy:
-```
-python plot_accuracy.py --dir_rgb ..\DFormer\checkpoints\SynthDet2_DFormer-Tiny_20240121-162131\ --dir_rgbd ..\DFormer\checkpoints\SynthDet2_DFormer-Tiny_20240121-130329\
-```
 
 ## Simple Segmentation network
 Inside src/SynthDet_Segmentation
 
-#### Training
+### Training
 In the config can decide what to use
 TODO change channels to config
 ```
@@ -82,6 +66,10 @@ Look at tensorboard:
 ```
 tensorboard --logdir=checkpoints --host localhost --port 8888
 ```
+
+## Plotting
+
+See documentation [here](code/DFormer_Pascal/README.md)
 
 ## MNIST
 

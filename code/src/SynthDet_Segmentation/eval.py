@@ -35,29 +35,6 @@ def evaluate_msf(model, dataloader, config, device, scales, flip):
 
     return all_metrics
 
-@torch.no_grad()
-def create_predictions(location, model, dataloader, config, device):
-    model.eval()
-
-    n_classes = config.num_classes
-
-    for i, minibatch in enumerate(tqdm(dataloader)):
-        images = minibatch["data"]
-        labels = minibatch["label"]
-        modal_xs = minibatch["modal_x"]
-        # print(images.shape,labels.shape)
-        images = images.to(device)
-        modal_xs = modal_xs.to(device)
-        labels = labels.to(device)
-        B, H, W = labels.shape
-
-        logits = model(images, modal_xs)
-        predictions = logits.softmax(dim=1)
-
-        for j in range(B):
-            current_index = i * config.batch_size + j
-            np.save(os.path.join(location, f"pred_test_{current_index}.npy"), predictions[j].unsqueeze(0).cpu().numpy())
-
 
 class Metrics:
     def __init__(self, num_classes: int, ignore_label: int, device) -> None:

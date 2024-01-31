@@ -51,7 +51,9 @@ C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = 'Segmodel' # Remember change the path below.
-C.pretrained_model = None #'checkpoints/pretrained/Segmodel.pth'
+C.pretrained_model_rgb = None #'checkpoints/pretrained/Segmodel.pth' 
+C.pretrained_model_rgbd = None #'checkpoints/pretrained/Segmodel.pth'
+C.pretrained_model_depth = None #'checkpoints/pretrained/Segmodel.pth'
 C.decoder = 'ham'
 C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'

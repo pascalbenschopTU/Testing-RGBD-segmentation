@@ -5,3 +5,4 @@ SynthDet/
 logs/
 checkpoints/
 .vscode/
+config/

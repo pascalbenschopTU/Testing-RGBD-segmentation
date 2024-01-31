@@ -115,6 +115,7 @@ class SmallUNet(nn.Module):
         :param out_channels: number of channels in the result feature map
         """
         super(SmallUNet, self).__init__()
+        self.in_channels = in_channels
 
         # Double convolution layers for the contracting path.
         # The number of features gets doubled at each step starting from $64$.
@@ -153,10 +154,8 @@ class SmallUNet(nn.Module):
         :param x: input image
         """
         if modal_x is not None:
-             # In DFormer: x_e=x_e[:,0,:,:].unsqueeze(1)
-            depth = modal_x[:, 0, :, :].unsqueeze(1)
             # Here just append the depth map to rgb
-            rgb = torch.cat([rgb, depth], dim=1)
+            rgb = torch.cat([rgb, modal_x], dim=1)
 
         # To collect the outputs of contracting path for later concatenation with the expansive path.
         pass_through = []
@@ -192,8 +191,15 @@ class SmallUNet(nn.Module):
         """
         :param x: input image
         """
-        # To collect the outputs of contracting path for later concatenation with the expansive path.
-        out = self.encode_decode(rgb, modal_x)
+        if self.in_channels == 4:
+            # To collect the outputs of contracting path for later concatenation with the expansive path.
+            depth = modal_x[:, 0, :, :].unsqueeze(1)
+            out = self.encode_decode(rgb, depth)
+        if self.in_channels == 3:
+            out = self.encode_decode(rgb)
+        if self.in_channels == 1:
+            depth = modal_x[:, 0, :, :].unsqueeze(1)
+            out = self.encode_decode(depth)
 
         if label is not None:
             loss = self.criterion(out, label.long())

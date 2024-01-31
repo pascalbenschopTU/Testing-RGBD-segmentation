@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 from tensorboardX import SummaryWriter
-from eval import Metrics, create_predictions, evaluate_msf
+from eval import Metrics
 
 N_CLASSES = 64
 
@@ -35,7 +35,8 @@ def train(config, args):
     config_module = importlib.import_module(args.config)
     config = config_module.config
 
-    config.log_dir = config.log_dir+'_'+time.strftime('%Y%m%d-%H%M%S', time.localtime()).replace(' ','_')
+    config.log_dir += 'c'+str(args.channels)
+    config.log_dir += '_'+time.strftime('%Y%m%d-%H%M%S', time.localtime()).replace(' ','_')
     if not os.path.isdir(config.log_dir):
         os.makedirs(config.log_dir)
 
@@ -46,9 +47,15 @@ def train(config, args):
     val_loader = get_val_loader(RGBXDataset, config)
     # Create the model
     model = SmallUNet(args.channels, N_CLASSES, criterion=torch.nn.CrossEntropyLoss(reduction='mean'))
-    if config.pretrained_model is not None:
-        print('load pretrained model from ',config.pretrained_model)
-        model.load_state_dict(torch.load(config.pretrained_model))
+    if args.channels == 3 and config.pretrained_model_rgb != None:
+        print('load pretrained model from ',config.pretrained_model_rgb)
+        model.load_state_dict(torch.load(config.pretrained_model_rgb))
+    elif args.channels == 4 and config.pretrained_model_rgbd != None:
+        print('load pretrained model from ',config.pretrained_model_rgbd)
+        model.load_state_dict(torch.load(config.pretrained_model_rgbd))
+    elif args.channels == 1 and config.pretrained_model_depth != None:
+        print('load pretrained model from ',config.pretrained_model_depth)
+        model.load_state_dict(torch.load(config.pretrained_model_depth))
     else:
         # Initialize the weights
         for m in model.modules():
@@ -125,7 +132,7 @@ def train(config, args):
                 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
                 bar_format = '{desc}[{elapsed}<{remaining},{rate_fmt}]'
-                pbar = tqdm(range(config.niters_per_epoch), file=sys.stdout,
+                pbar = tqdm(range(config.num_eval_imgs // config.val_batch_size + 1), file=sys.stdout,
                             bar_format=bar_format)
                 dataloader = iter(val_loader)
 
@@ -171,11 +178,11 @@ def train(config, args):
                 torch.save(model.state_dict(), config.log_dir + '/checkpoint_epoch_{}_miou_{}.pth'.format(epoch, miou))
             print('miou',miou,'best',best_miou)
 
-    # TODO remove this back outside for loop
-    location = os.path.join(config.log_dir, "predictions")
-    pathlib.Path(location).mkdir(parents=True, exist_ok=True)
-    # Predict on the validation set
-    create_predictions(location, model, val_loader, config, device)
+    # # TODO remove this back outside for loop
+    # location = os.path.join(config.log_dir, "predictions")
+    # pathlib.Path(location).mkdir(parents=True, exist_ok=True)
+    # # Predict on the validation set
+    # create_predictions(location, model, val_loader, config, device)
 
 
 

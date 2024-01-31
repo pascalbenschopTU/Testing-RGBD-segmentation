@@ -51,7 +51,7 @@ C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = 'Segmodel' # Remember change the path below.
-C.pretrained_model = 'checkpoints/pretrained/SynthDet_pretrained.pth'
+C.pretrained_model = 'checkpoints/pretrained/SynthDet_pretrained_rgbd.pth'
 C.decoder = 'ham'
 C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'
@@ -63,10 +63,10 @@ C.lr_power = 0.9
 C.momentum = 0.9
 C.weight_decay = 0.01
 C.batch_size = 16 # 16
-C.val_batch_size = 1
+C.val_batch_size = 16
 C.nepochs = 100 # 300
 C.niters_per_epoch = C.num_train_imgs // C.batch_size  + 1
-C.num_workers = 8
+C.num_workers = 16
 C.train_scale_array = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
 C.warm_up_epoch = 10
 
