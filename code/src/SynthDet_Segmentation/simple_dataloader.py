@@ -70,12 +70,15 @@ class Pre(object):
         return img
 
     def __call__(self, rgb, gt, modal_x):
+        if len(rgb.shape) != 3 or len(modal_x.shape) != 3:
+            raise ValueError(f"Invalid shapes: rgb={rgb.shape}, modal_x={modal_x.shape}")
+        
         rgb = self.normalize(rgb, self.norm_mean, self.norm_std)
         if self.sign:
             modal_x = self.normalize(modal_x, [0.48,0.48,0.48], [0.28,0.28,0.28])
         else:
             modal_x = self.normalize(modal_x, self.norm_mean, self.norm_std)
-        
+
         rgb = rgb.transpose(2, 0, 1)
         modal_x = modal_x.transpose(2, 0, 1)
 

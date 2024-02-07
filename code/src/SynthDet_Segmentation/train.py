@@ -20,7 +20,9 @@ import torch.nn.init as init
 from tensorboardX import SummaryWriter
 from eval import Metrics
 
-N_CLASSES = 64
+N_CLASSES = 81 #64
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def train(config, args):
     """
@@ -30,7 +32,6 @@ def train(config, args):
     :param learning_rate: learning rate
     :param device: device to use for training
     """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     config_module = importlib.import_module(args.config)
     config = config_module.config
@@ -129,7 +130,6 @@ def train(config, args):
             
             with torch.no_grad():
                 model.eval()
-                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
                 bar_format = '{desc}[{elapsed}<{remaining},{rate_fmt}]'
                 pbar = tqdm(range(config.num_eval_imgs // config.val_batch_size + 1), file=sys.stdout,

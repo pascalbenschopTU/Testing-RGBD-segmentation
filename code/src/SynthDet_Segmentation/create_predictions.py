@@ -5,14 +5,14 @@ from tqdm import tqdm
 import numpy as np
 
 from simple_dataloader import get_val_loader
-from eval import create_predictions
 from segmentation_model import SmallUNet
 
 import sys
 sys.path.append("../../DFormer/utils/dataloader/")
 from RGBXDataset import RGBXDataset
 
-N_CLASSES = 64
+# N_CLASSES = 64
+N_CLASSES = 81
 
 # TODO make it so that it only saves predictions that contain interesting classes
 
@@ -37,7 +37,8 @@ def create_predictions(location, model, dataloader, config, device):
 
         for j in range(B):
             current_index = i * config.batch_size + j
-            np.save(os.path.join(location, f"pred_test_{current_index}.npy"), predictions[j].unsqueeze(0).cpu().numpy())
+            prediction = predictions[j].argmax(dim=0).unsqueeze(0).cpu().numpy()
+            np.save(os.path.join(location, f"pred_test_{current_index}.npy"), prediction)
 
 def main(args):
     config_module = importlib.import_module(args.config)

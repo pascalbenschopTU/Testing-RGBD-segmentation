@@ -7,6 +7,7 @@ import os
 import matplotlib.patches as mpatches
 from tqdm import tqdm
 import torch
+import torch.nn as nn
 import sys
 from simple_dataloader import get_val_loader
 from segmentation_model import SmallUNet
@@ -16,14 +17,19 @@ from RGBXDataset import RGBXDataset
 
 # Class names from the config file
 # class_names = ['wall','floor','cabinet','bed','chair','sofa','table','door','window','bookshelf','picture','counter','blinds','desk','shelves','curtain','dresser','pillow','mirror','floor_mat','clothes','ceiling','books','fridge','tv','paper','towel','shower_curtain','box','whiteboard','person','night_stand','toilet','sink','lamp','bathtub','bag']
-class_names = ['background', 'book_dorkdiaries_aladdin', 'candy_minipralines_lindt', 'candy_raffaello_confetteria', 'cereal_capn_crunch', 'cereal_cheerios_honeynut', 'cereal_corn_flakes', 'cereal_cracklinoatbran_kelloggs', 'cereal_oatmealsquares_quaker', 'cereal_puffins_barbaras', 'cereal_raisin_bran', 'cereal_rice_krispies', 'chips_gardensalsa_sunchips', 'chips_sourcream_lays', 'cleaning_freegentle_tide', 'cleaning_snuggle_henkel', 'cracker_honeymaid_nabisco', 'cracker_lightrye_wasa', 'cracker_triscuit_avocado', 'cracker_zwieback_brandt', 'craft_yarn_caron', 'drink_adrenaline_shock', 'drink_coffeebeans_kickinghorse', 'drink_greentea_itoen', 'drink_orangejuice_minutemaid', 'drink_whippingcream_lucerne', 'footware_slippers_disney', 'hygiene_poise_pads', 'lotion_essentially_nivea', 'lotion_vanilla_nivea', 'pasta_lasagne_barilla', 'pest_antbaits_terro', 'porridge_grits_quaker', 'seasoning_canesugar_candh', 'snack_biscotti_ghiott', 'snack_breadsticks_nutella', 'snack_chips_pringles', 'snack_coffeecakes_hostess', 'snack_cookie_famousamos', 'snack_cookie_petitecolier', 'snack_cookie_quadratini', 'snack_cookie_waffeletten', 'snack_cookie_walkers', 'snack_cookies_fourre', 'snack_granolabar_kashi', 'snack_granolabar_kind', 'snack_granolabar_naturevalley', 'snack_granolabar_quaker', 'snack_salame_hillshire', 'soup_chickenenchilada_progresso', 'soup_tomato_pacific', 'storage_ziploc_sandwich', 'toiletry_tissue_softly', 'toiletry_toothpaste_colgate', 'toy_cat_melissa', 'utensil_candle_decorators', 'utensil_coffee_filters', 'utensil_cottonovals_signaturecare', 'utensil_papertowels_valuecorner', 'utensil_toiletpaper_scott', 'utensil_trashbag_valuecorner', 'vitamin_centrumsilver_adults', 'vitamin_centrumsilver_men', 'vitamin_centrumsilver_woman']
+# class_names = ['background', 'book_dorkdiaries_aladdin', 'candy_minipralines_lindt', 'candy_raffaello_confetteria', 'cereal_capn_crunch', 'cereal_cheerios_honeynut', 'cereal_corn_flakes', 'cereal_cracklinoatbran_kelloggs', 'cereal_oatmealsquares_quaker', 'cereal_puffins_barbaras', 'cereal_raisin_bran', 'cereal_rice_krispies', 'chips_gardensalsa_sunchips', 'chips_sourcream_lays', 'cleaning_freegentle_tide', 'cleaning_snuggle_henkel', 'cracker_honeymaid_nabisco', 'cracker_lightrye_wasa', 'cracker_triscuit_avocado', 'cracker_zwieback_brandt', 'craft_yarn_caron', 'drink_adrenaline_shock', 'drink_coffeebeans_kickinghorse', 'drink_greentea_itoen', 'drink_orangejuice_minutemaid', 'drink_whippingcream_lucerne', 'footware_slippers_disney', 'hygiene_poise_pads', 'lotion_essentially_nivea', 'lotion_vanilla_nivea', 'pasta_lasagne_barilla', 'pest_antbaits_terro', 'porridge_grits_quaker', 'seasoning_canesugar_candh', 'snack_biscotti_ghiott', 'snack_breadsticks_nutella', 'snack_chips_pringles', 'snack_coffeecakes_hostess', 'snack_cookie_famousamos', 'snack_cookie_petitecolier', 'snack_cookie_quadratini', 'snack_cookie_waffeletten', 'snack_cookie_walkers', 'snack_cookies_fourre', 'snack_granolabar_kashi', 'snack_granolabar_kind', 'snack_granolabar_naturevalley', 'snack_granolabar_quaker', 'snack_salame_hillshire', 'soup_chickenenchilada_progresso', 'soup_tomato_pacific', 'storage_ziploc_sandwich', 'toiletry_tissue_softly', 'toiletry_toothpaste_colgate', 'toy_cat_melissa', 'utensil_candle_decorators', 'utensil_coffee_filters', 'utensil_cottonovals_signaturecare', 'utensil_papertowels_valuecorner', 'utensil_toiletpaper_scott', 'utensil_trashbag_valuecorner', 'vitamin_centrumsilver_adults', 'vitamin_centrumsilver_men', 'vitamin_centrumsilver_woman']
+class_names = ["background", "book_dorkdiaries_aladdin", "candy_minipralines_lindt", "candy_raffaello_confetteria", "cereal_capn_crunch", "cereal_cheerios_honeynut", "cereal_corn_flakes", "cereal_cracklinoatbran_kelloggs", "cereal_oatmealsquares_quaker", "cereal_puffins_barbaras", "cereal_raisin_bran", "cereal_rice_krispies", "chips_gardensalsa_sunchips", "chips_sourcream_lays", "cleaning_freegentle_tide", "cleaning_snuggle_henkel", "cracker_honeymaid_nabisco", "cracker_lightrye_wasa", "cracker_triscuit_avocado", "cracker_zwieback_brandt", "craft_yarn_caron", "drink_adrenaline_shock", "drink_coffeebeans_kickinghorse", "drink_greentea_itoen", "drink_orangejuice_minutemaid", "drink_whippingcream_lucerne", "footware_slippers_disney", "hygiene_poise_pads", "lotion_essentially_nivea", "lotion_vanilla_nivea", "pasta_lasagne_barilla", "pest_antbaits_terro", "porridge_grits_quaker", "seasoning_canesugar_candh", "snack_biscotti_ghiott", "snack_breadsticks_nutella", "snack_chips_pringles", "snack_coffeecakes_hostess", "snack_cookie_famousamos", "snack_cookie_petitecolier", "snack_cookie_quadratini", "snack_cookie_waffeletten", "snack_cookie_walkers", "snack_cookies_fourre", "snack_granolabar_kashi", "snack_granolabar_kind", "snack_granolabar_naturevalley", "snack_granolabar_quaker", "snack_salame_hillshire", "soup_chickenenchilada_progresso", "soup_tomato_pacific", "storage_ziploc_sandwich", "toiletry_tissue_softly", "toiletry_toothpaste_colgate", "toy_cat_melissa", "utensil_candle_decorators", "utensil_coffee_filters", "utensil_cottonovals_signaturecare", "utensil_papertowels_valuecorner", "utensil_toiletpaper_scott", "utensil_trashbag_valuecorner", "vitamin_centrumsilver_adults", "vitamin_centrumsilver_men", "vitamin_centrumsilver_woman", "5 Side Diamond", "HardStar", "BeveledStar", "Hexgon", "Cubie", "Spiral", "Penta", "Heart", "Cuboid", "SphereGemLarge", "Diamondo", "Diamondo5side", "4 Side Diamond", "Character", "SoftStar", "SphereGemSmall", "CubieBeveled"]
+
 
 max_length = max(len(class_name) for class_name in class_names)
 class_names = [class_name.ljust(max_length) for class_name in class_names]
 
-N_CLASSES = 64
+# N_CLASSES = 64
+N_CLASSES = 81
 
-def get_results(dir_rgb, dir_rgbd):
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def get_results(dir_rgb, dir_rgbd, metric="ious"):
     acc_rgb_text_location = os.path.join(dir_rgb, "results.txt")
     acc_depth_text_location = os.path.join(dir_rgbd, "results.txt")
 
@@ -34,16 +40,16 @@ def get_results(dir_rgb, dir_rgbd):
     # Parse accuracy values
     acc_rgb_values = {class_name: [] for class_name in class_names}
     for line in acc_rgb_values_text.split("\n")[5:]:
-        if line.startswith("acc:"):
-            line = line.split("],")[0]
+        if metric in line:
+            line = line.split(metric)[1].split("],")[0]
             values = [float(x) for x in re.findall(r"[-+]?\d*\.\d+|\d+", line)]
             for class_name, value in zip(class_names, values):
                 acc_rgb_values[class_name].append(value)
 
     acc_depth_values = {class_name: [] for class_name in class_names}
     for line in acc_depth_values_text.split("\n")[5:]:
-        if line.startswith("acc"):
-            line = line.split("],")[0]
+        if metric in line:
+            line = line.split(metric)[1].split("],")[0]
             values = [float(x) for x in re.findall(r"[-+]?\d*\.\d+|\d+", line)]
             for class_name, value in zip(class_names, values):
                 acc_depth_values[class_name].append(value)
@@ -73,7 +79,7 @@ def plot_accuracy(rgb_values, depth_values, difference):
     x = range(len(sorted_class_names))
     plt.xticks(x, sorted_class_names, rotation=-45, ha='left', rotation_mode="anchor")
 
-    plt.bar(np.array(x) - 0.2, sorted_rgb_values, label='RGB + Black', color='#FF69B4', width=0.4)
+    plt.bar(np.array(x) - 0.2, sorted_rgb_values, label='RGB', color='#FF69B4', width=0.4)
     plt.bar(np.array(x) + 0.2, sorted_depth_values, label='RGB + Depth', color='green', width=0.4)
 
     plt.title('Accuracy values for all classes over epochs')
@@ -148,10 +154,10 @@ def create_and_plot_predictions(args, classes_of_interest):
         logits_b = model_b(images, modal_xs)
         predictions_b = logits_b.softmax(dim=1)
         
-        plot_predictions(predictions_a.cpu().numpy(), predictions_b.cpu().numpy(), i, args)
+        plot_prediction(predictions_a.cpu().numpy(), predictions_b.cpu().numpy(), i, args)
 
 
-def plot_predictions(prediction_a, prediction_b, index, args):
+def plot_prediction(prediction_a, prediction_b, index, args):
     dir_dataset = args.dir_dataset
 
     target_format = os.path.join(dir_dataset, "labels", "test_{}.png")
@@ -163,8 +169,8 @@ def plot_predictions(prediction_a, prediction_b, index, args):
     # Load the target and prediction as numpy files
     for i in range(0, length_predictions):
         # Convert the prediction to RGB
-        pred_rgb_black = convert_prediction_to_rgb(np.expand_dims(prediction_a[i], axis=0))
-        pred_rgb_depth = convert_prediction_to_rgb(np.expand_dims(prediction_b[i], axis=0))
+        pred_rgb_black = prediction_a[i]
+        pred_rgb_depth = prediction_b[i]
         
         # Load the target and depth and rgb image
         target = plt.imread(target_format.format(i+index))
@@ -209,15 +215,14 @@ def plot_predictions(prediction_a, prediction_b, index, args):
 
         plt.show()
 
-def convert_prediction_to_rgb(prediction, colormap=None):
-    # Ensure prediction is a NumPy array
-    prediction_np = np.array(prediction)
-
-    # Extract the class indices (assuming the class dimension is the second dimension)
-    class_indices = np.argmax(prediction_np, axis=1)
-
-    # Remove the first channel
-    return class_indices.squeeze()
+def plot_predictions(predictions_dir_a, predictions_dir_b, args):
+    # Load the target and prediction as numpy files
+    for i in range(0, 100):
+        # Convert the prediction to RGB
+        pred_rgb_black = np.load(os.path.join(predictions_dir_a, f"pred_test_{i}.npy"))
+        pred_rgb_depth = np.load(os.path.join(predictions_dir_b, f"pred_test_{i}.npy"))
+        
+        plot_prediction(pred_rgb_black, pred_rgb_depth, i, args)
 
 def main(args):
     dir_model_a = args.model_a_path
@@ -232,17 +237,24 @@ def main(args):
 
     classes_of_interest = statistics(difference, class_names)
 
+    if os.path.isdir(dir_model_a_directory) and os.path.isdir(dir_model_b_directory):
+        predictions_dir_a = os.path.join(dir_model_a_directory, "predictions")
+        predictions_dir_b = os.path.join(dir_model_b_directory, "predictions")
+        if os.path.isdir(predictions_dir_a) and os.path.isdir(predictions_dir_b):
+            plot_predictions(predictions_dir_a, predictions_dir_b, args)
+            return
+
     create_and_plot_predictions(args, classes_of_interest)
 
 
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--model_a_path', type=str, help='Path to the RGB model directory')
-    argparser.add_argument('--model_b_path', type=str, help='Path to the RGBD model directory')
+    argparser.add_argument('--model_a_path', type=str, help='Path to the RGB model directory', default=None)
+    argparser.add_argument('--model_b_path', type=str, help='Path to the RGBD model directory', default=None)
     argparser.add_argument('--dir_dataset', type=str, help='Path to the dataset directory')
-    argparser.add_argument('--channels_a', type=int, default=4)
-    argparser.add_argument('--channels_b', type=int, default=3)
+    argparser.add_argument('--channels_a', type=int, default=3)
+    argparser.add_argument('--channels_b', type=int, default=4)
     argparser.add_argument('--config', type=str, default='config.SynthDet_default_Segmodel')
     args = argparser.parse_args()
     

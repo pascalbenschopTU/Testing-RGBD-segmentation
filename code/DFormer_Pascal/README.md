@@ -18,3 +18,11 @@ python .\plot_predictions.py --dir_rgb ..\src\SynthDet_Segmentation\checkpoints\
 ```
 python plot_accuracy.py --dir_rgb ..\DFormer\checkpoints\SynthDet2_DFormer-Tiny_20240121-162131\ --dir_rgbd ..\DFormer\checkpoints\SynthDet2_DFormer-Tiny_20240121-130329\
 ```
+
+
+# Creating results (inside DFormer)
+
+```
+python .\utils\create_predictions.py --config local_configs.SynthDet.SynthDet_gems_light_color_DFormer_Tiny --model_path .\checkpoints\SynthDet_gems_light_color_DFormer-Tiny_20240205-125951\epoch-100.pth_miou_7.24 --output_path .\checkpoints\SynthDet_gems_light_color_DFormer-Tiny_20240205-125951\predictions
+
+```
