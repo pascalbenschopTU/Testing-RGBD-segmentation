@@ -34,7 +34,7 @@ python convert_solo_depth_to_coco.py path\to\UnityTechnologies\SynthDet\solo_x .
 
 Inside SynthDet_Pascal
 ```
-python convert_coco_to_dformer.py ..\data\SynthDet\coco\ path\to\DFormer\datasets\SynthDet
+python convert_coco_to_dformer.py ..\data\SynthDet\coco\ ..\DFormer\datasets\SynthDet_{new_name}
 ```
 
 ### Training
