@@ -5,6 +5,8 @@ from PIL import Image
 from scipy.interpolate import griddata
 from scipy import ndimage
 
+# Functions from https://github.com/ankurhanda/simkinect/tree/master
+
 def add_gaussian_shifts(depth, std=1/2.0):
 
     rows, cols = depth.shape 

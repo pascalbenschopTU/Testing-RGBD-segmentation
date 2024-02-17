@@ -23,6 +23,29 @@ def process_depth_black(filename, src_dir, dst_dir, image_dir):
         depth_black = Image.fromarray(depth_black)
         depth_black.save(os.path.join(dst_dir, filename))
 
+def process_depth_inverse_test(filename, src_dir, dst_dir, image_dir):
+    if filename.endswith('.png'):
+        original_depth = cv2.imread(os.path.join(src_dir, filename), cv2.IMREAD_UNCHANGED)
+        original_depth = np.array(original_depth)
+        if 'test' in filename:
+            # print(original_depth.shape, np.max(original_depth), np.min(original_depth))
+            inverted_depth = 255 - original_depth
+            inverted_depth = np.stack([inverted_depth] * 3, axis=-1)
+            inverted_depth = Image.fromarray(inverted_depth)
+            inverted_depth.save(os.path.join(dst_dir, filename))
+        else:
+            original_depth = np.stack([original_depth] * 3, axis=-1)
+            original_depth = Image.fromarray(original_depth.astype(np.uint8))
+            original_depth.save(os.path.join(dst_dir, filename))
+
+def process_depth_rgb(filename, src_dir, dst_dir, image_dir):
+    if filename.endswith('.png'):
+        original_depth = cv2.imread(os.path.join(src_dir, filename), cv2.IMREAD_UNCHANGED)
+        original_depth = np.array(original_depth)
+        original_depth = np.stack([original_depth] * 3, axis=-1)
+        original_depth = Image.fromarray(original_depth.astype(np.uint8))
+        original_depth.save(os.path.join(dst_dir, filename))
+
 
 def change_dataset(dataset_location, src_dir='Depth_original', dst_dir='Depth', type='black'):
     src_dir = os.path.join(dataset_location, src_dir)
@@ -40,6 +63,10 @@ def change_dataset(dataset_location, src_dir='Depth_original', dst_dir='Depth', 
         pool.starmap(process_depth_kinect_noise, [(filename, src_dir, dst_dir, image_dir) for filename in filenames])
     elif type == 'black':
         pool.starmap(process_depth_black, [(filename, src_dir, dst_dir, image_dir) for filename in filenames])
+    elif type == 'inverse_test':
+        pool.starmap(process_depth_inverse_test, [(filename, src_dir, dst_dir, image_dir) for filename in filenames])
+    elif type == 'rgb':
+        pool.starmap(process_depth_rgb, [(filename, src_dir, dst_dir, image_dir) for filename in filenames])
 
     # Close the pool of worker processes
     pool.close()

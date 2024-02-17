@@ -5,6 +5,7 @@ import OpenEXR
 import Imath
 import numpy as np
 from tqdm import tqdm
+import multiprocessing
 
 def extract_depth_from_exr(exr_path):
     # Read the EXR file
@@ -37,36 +38,51 @@ def save_depth_image(depth_image, output_path):
     depth_image = (depth_image * 255).astype(np.uint8)  # Convert depth image to 0-255 range
     cv2.imwrite(output_path, depth_image)  # Save only one channel for simplicity
 
-def process_solo_dataset(input_folder, output_folder):
-    os.makedirs(output_folder, exist_ok=True)
+# def process_solo_dataset(input_folder, output_folder):
+#     os.makedirs(output_folder, exist_ok=True)
 
-    directory_list = [f for f in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, f))]
+def process_sequence(sequence_folder, input_folder, output_folder):
+    sequence_path = os.path.join(input_folder, sequence_folder)
+
+    # Find the current iteration, which is the last digit in the sequence folder name
+    sequence_digit = int(sequence_folder.split("sequence.")[-1])
+
+    # Find the depth EXR file
+    exr_file_path = os.path.join(sequence_path, f"step0.camera.Depth.exr")
+
+    if os.path.isfile(exr_file_path):
+        # Extract depth from EXR file
+        depth_image = extract_depth_from_exr(exr_file_path)
+
+        # Save depth image as PNG in the specified output folder
+        output_path = os.path.join(output_folder, f"depth_{sequence_digit}.png")
+        save_depth_image(depth_image, output_path)
+
+def process_solo_dataset(args):
+    # Create the output folder if it does not exist
+    os.makedirs(args.output_folder, exist_ok=True)
+    
+    directory_list = [f for f in os.listdir(args.input_folder) if os.path.isdir(os.path.join(args.input_folder, f))]
 
     # Initialize the progress bar
     progress_bar = tqdm(total=len(directory_list), desc='Processing')
 
+    # Create a pool of worker processes
+    pool = multiprocessing.Pool()
+
+    # Process each sequence folder in parallel
     for sequence_folder in directory_list:
-        sequence_path = os.path.join(input_folder, sequence_folder)
+        pool.apply_async(process_sequence, args=(sequence_folder, args.input_folder, args.output_folder), callback=lambda _: progress_bar.update(1))
 
-        # Find the current iteration, which is the last digit in the sequence folder name
-        sequence_digit = int(sequence_folder.split("sequence.")[-1])
+    # Close the pool of worker processes
+    pool.close()
 
-        # Find the depth EXR file
-        exr_file_path = os.path.join(sequence_path, f"step0.camera.Depth.exr")
-
-        if os.path.isfile(exr_file_path):
-            # Extract depth from EXR file
-            depth_image = extract_depth_from_exr(exr_file_path)
-
-            # Save depth image as PNG in the specified output folder
-            output_path = os.path.join(output_folder, f"depth_{sequence_digit}.png")
-            save_depth_image(depth_image, output_path)
-
-        # Update the progress bar
-        progress_bar.update(1)
+    # Wait for all processes to finish
+    pool.join()
 
     # Close the progress bar
     progress_bar.close()
+
 
 
 def main():
@@ -75,7 +91,7 @@ def main():
     parser.add_argument('output_folder', help='Path to the output folder for depth images')
     args = parser.parse_args()
 
-    process_solo_dataset(args.input_folder, args.output_folder)
+    process_solo_dataset(args)
 
 if __name__ == "__main__":
     main()
