@@ -136,44 +136,42 @@ class SmartPeripheralRGBDModel(nn.Module):
         return masks
         
     def forward(self, rgb, depth, label=None, plot=False):
-        B, C, H, W = depth.shape
+        B, C, H, W = rgb.shape
+        num_classes = 3
 
         with torch.no_grad():
             masks = self.create_masks(depth, num_classes=4)
             masks = masks.to(rgb.device)
 
-        output = torch.zeros(B, self.out_channels , H, W).to(rgb.device)
-
         individual_losses = []
-        for m in range(masks.shape[1]):
+        for m in range(num_classes):
             expanded_masks = masks[:, m].unsqueeze(1)  # Expand dimensions to match the number of channels in rgb
-            soft_masked_image = (expanded_masks * rgb) + (~expanded_masks * gaussian_blur(rgb, kernel_size=25, sigma=15.0))
+            rgb *= expanded_masks
+            rgb += (~expanded_masks * gaussian_blur(rgb, kernel_size=25, sigma=15.0))
 
-            out = self.model(soft_masked_image, depth)
-            output += out * self.depth_layer_weights[m]
+            out = self.model(rgb, depth)
+            mask = masks[:, m].unsqueeze(1)
+            if plot:
+                import matplotlib.pyplot as plt
+                fig, ax = plt.subplots(1, 5, figsize=(20, 5))
+                ax[0].imshow(rgb[0].permute(1, 2, 0).cpu().numpy())
+                ax[2].imshow(out[0].argmax(0).cpu().numpy())
+                ax[3].imshow((mask[0] * output[0]).argmax(0).cpu().numpy())
+                ax[4].imshow(label[0].cpu().numpy())
+                plt.show()
+            if m == 0:
+                output = out * self.depth_layer_weights[m]
+                if label is not None:
+                    individual_losses.append(self.model.criterion(output * mask, label.long()))
+            else:
+                output += out * self.depth_layer_weights[m]
+                if label is not None:
+                    individual_losses.append(self.model.criterion(out * self.depth_layer_weights[m] * mask, label.long()))
 
-            if label is not None:
-                masked_output = out * expanded_masks
-                masked_label = label * expanded_masks.squeeze(1)
-
-                if plot:
-                    import matplotlib.pyplot as plt
-                    fig, ax = plt.subplots(1, 5, figsize=(20, 5))
-                    ax[0].imshow(rgb[0].permute(1, 2, 0).cpu().numpy())
-                    ax[1].imshow(soft_masked_image[0].permute(1, 2, 0).cpu().numpy())
-                    ax[2].imshow(out[0].argmax(0).cpu().numpy())
-                    ax[3].imshow(masked_output[0].argmax(0).cpu().numpy())
-                    ax[4].imshow(masked_label[0].cpu().numpy())
-                    plt.show()
-
-                individual_loss = self.model.criterion(masked_output, masked_label.long())
-                individual_losses.append(individual_loss)
-        
         if label is not None:
-            loss = self.model.criterion(output, label.long())
-            individual_losses.append(loss)
-            final_loss = sum(individual_losses)
-            return final_loss
+            combined_loss = self.model.criterion(output, label.long())
+
+            return sum(individual_losses) + combined_loss
         else:
             return output
         
