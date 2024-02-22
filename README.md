@@ -71,6 +71,16 @@ tensorboard --logdir=checkpoints --host localhost --port 8888
 
 See documentation [here](code/DFormer_Pascal/README.md)
 
+## Deeplab-xception
+Inside code/
+
+### Training
+
+```
+python .\pytorch-deeplab-xception\train.py --config DFormer.local_configs.SUNRGBD.SUNRGBD_DFormer_Tiny --resume .\pytorch-deeplab-xception\checkpoints\run\SUNRGBD\deeplab-xception\model_best.pth.tar --lr 0.001 --ft
+```
+
+
 ## MNIST
 
 ### Setup

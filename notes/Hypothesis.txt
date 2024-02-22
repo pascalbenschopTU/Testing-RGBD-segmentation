@@ -1,0 +1,9 @@
+Depth is useful for computer vision tasks
+Especially in situations with:
+- Difficult lighting
+- Distracting background / foreground
+- Lot of color / texture variation
+- Many different shaped objects
+
+[Ideal]
+There are scenario's where current RGB-D networks do not use depth perfectly. - improvements can be made
