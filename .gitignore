@@ -1,8 +1,14 @@
 code/data/
 **/__pycache__/
 DFormer/
-SynthDet/
 logs/
 checkpoints/
 .vscode/
 config/
+
+SynthDet/*
+!code/SynthDet/SynthDet/Assets/Scripts/Randomizers/*.cs
+!code/SynthDet/SynthDet/Assets/Scripts/RandomizerTags/*.cs
+code/SynthDet/SynthDet/Assets/Scripts/Randomizers/*.meta
+code/SynthDet/SynthDet/Assets/Scripts/RandomizerTags/*.meta
+
