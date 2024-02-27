@@ -57,7 +57,9 @@ for /f "delims=" %%f in ('dir /b /a-d /on checkpoints\SynthDet_%dataset_name%_DF
 echo Last directory: %last_directory%
 echo Last filename: %last_filename%
 
-python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --model_weights checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
+set rgb_depth_model_weights=checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
+
+python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --model_weights %rgb_depth_model_weights%
 
 set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
 @REM Change the depth of the dataset to black
@@ -83,4 +85,10 @@ for /f "delims=" %%f in ('dir /b /a-d /on checkpoints\SynthDet_%dataset_name%_DF
 echo Last directory: %last_directory%
 echo Last filename: %last_filename%
 
-python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --model_weights checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
+set rgb_black_model_weights=checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
+
+python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --model_weights %rgb_black_model_weights%
+
+
+@REM Evaluate the models
+python utils\create_predictions.py --model_a_path %rgb_black_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny

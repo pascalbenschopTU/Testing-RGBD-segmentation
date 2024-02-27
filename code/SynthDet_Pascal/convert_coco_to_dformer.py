@@ -157,7 +157,7 @@ class KinectNoise:
         return noisy_depth
 
 class AdaptiveDatasetCreator:
-    def __init__(self, dataset_root, save_location, image_size=(480, 480), dataset_split=(0.7, 0.3)):
+    def __init__(self, dataset_root, save_location, image_size=(480, 480), dataset_split=(0.5, 0.5)):
         self.dataset_root = dataset_root
         self.save_location = save_location
         self.image_size = image_size
@@ -169,10 +169,11 @@ class AdaptiveDatasetCreator:
         os.makedirs(os.path.join(save_location, 'labels'), exist_ok=True)
 
         # Create directories for the different types of depth images
-        # os.makedirs(os.path.join(save_location, 'Depth_black'), exist_ok=True)
-        os.makedirs(os.path.join(save_location, 'Depth_kinect_noise'), exist_ok=True)
-        os.makedirs(os.path.join(save_location, 'Depth_noise'), exist_ok=True)
-        os.makedirs(os.path.join(save_location, 'Depth_compressed'), exist_ok=True)
+        os.makedirs(os.path.join(save_location, 'Depth_black'), exist_ok=True)
+        
+        # os.makedirs(os.path.join(save_location, 'Depth_kinect_noise'), exist_ok=True)
+        # os.makedirs(os.path.join(save_location, 'Depth_noise'), exist_ok=True)
+        # os.makedirs(os.path.join(save_location, 'Depth_compressed'), exist_ok=True)
 
         # Create train.txt and test.txt files
         with open(os.path.join(save_location, 'train.txt'), 'w'):
@@ -257,9 +258,10 @@ class AdaptiveDatasetCreator:
             self.convert_and_save_RGB(rgb_data, f"train_{batch_idx}")
             self.convert_and_save_label(label, f"train_{batch_idx}")
             self.convert_and_save_depth(depth_data, f"train_{batch_idx}")
-            self.convert_and_save_depth_compressed(depth_data, f"train_{batch_idx}")
-            self.convert_and_save_depth_kinect_noise(depth_data, f"train_{batch_idx}")
-            self.convert_and_save_depth_noise(depth_data, f"train_{batch_idx}", noise_factor=10)
+            self.convert_and_save_depth_black(f"train_{batch_idx}")
+            # self.convert_and_save_depth_compressed(depth_data, f"train_{batch_idx}")
+            # self.convert_and_save_depth_kinect_noise(depth_data, f"train_{batch_idx}")
+            # self.convert_and_save_depth_noise(depth_data, f"train_{batch_idx}", noise_factor=10)
 
             # add a line to train.txt with the path to the RGB image and the path to the depth image
             # Example: RGB/train_0.jpg labels/train_0.png
@@ -270,9 +272,10 @@ class AdaptiveDatasetCreator:
             self.convert_and_save_RGB(rgb_data, f"test_{batch_idx}")
             self.convert_and_save_label(label, f"test_{batch_idx}")
             self.convert_and_save_depth(depth_data, f"test_{batch_idx}")
-            self.convert_and_save_depth_compressed(depth_data, f"test_{batch_idx}")
-            self.convert_and_save_depth_kinect_noise(depth_data, f"test_{batch_idx}")
-            self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=10)
+            self.convert_and_save_depth_black(f"test_{batch_idx}")
+            # self.convert_and_save_depth_compressed(depth_data, f"test_{batch_idx}")
+            # self.convert_and_save_depth_kinect_noise(depth_data, f"test_{batch_idx}")
+            # self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=10)
 
             # add a line to test.txt with the path to the RGB image and the path to the depth image
             # Example: RGB/test_0.jpg labels/test_0.png
@@ -284,7 +287,7 @@ def main():
     parser = argparse.ArgumentParser(description='Convert COCO dataset to DFormer dataset')
     parser.add_argument('dataset_root', help='Path to COCO dataset')
     parser.add_argument('save_location', help='Path to save the converted dataset')
-    parser.add_argument('--dataset_split', nargs=2, type=float, default=(0.7, 0.3), help='Train and test split')
+    parser.add_argument('--dataset_split', nargs=2, type=float, default=(0.5, 0.5), help='Train and test split')
     args = parser.parse_args()
     
     dataset_creator = AdaptiveDatasetCreator(args.dataset_root, args.save_location, dataset_split=args.dataset_split)
