@@ -92,3 +92,6 @@ python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%datase
 
 @REM Evaluate the models
 python utils\create_predictions.py --model_a_path %rgb_black_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny
+
+@REM Create gen_results.txt and store the last command
+echo utils\create_predictions.py --model_a_path %rgb_black_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny > checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\gen_results.txt

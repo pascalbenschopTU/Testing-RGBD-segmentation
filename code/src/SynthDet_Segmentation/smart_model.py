@@ -175,3 +175,51 @@ class SmartPeripheralRGBDModel(nn.Module):
         else:
             return output
         
+
+class SmartDepthModel(nn.Module):
+    def __init__(self, in_channels, out_channels, criterion=nn.CrossEntropyLoss(reduction='mean')):
+        super(SmartDepthModel, self).__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.criterion = criterion
+
+        # self.model = SmallUNet(in_channels, out_channels, criterion)
+        self.backbone_depth = DepthEncoder(in_channels, out_channels)
+
+    def forward(self, x, label=None):
+        return self.model(x, label=label)
+    
+
+
+class DepthEncoder(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(DepthEncoder, self).__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        self.encoder = nn.Sequential(
+            InceptionBlock(in_channels, 32),
+            InceptionBlock(32, 64),
+            InceptionBlock(128, 256),
+            InceptionBlock(256, out_channels),
+        )
+
+    def forward(self, x):
+        return self.encoder(x)
+
+class InceptionBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(InceptionBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+        self.conv2 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(in_channels, out_channels, kernel_size=5, padding=2)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        out1 = self.conv1(x)
+        out2 = self.conv2(x)
+        out3 = self.conv3(x)
+        out = torch.cat([out1, out2, out3], dim=1)
+        out = self.relu(out)
+        return out
+        

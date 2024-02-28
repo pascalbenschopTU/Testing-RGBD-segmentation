@@ -5,10 +5,8 @@ logs/
 checkpoints/
 .vscode/
 config/
+pytorch-deeplab-xception/
+SynthDet/
 
-SynthDet/*
-!code/SynthDet/SynthDet/Assets/Scripts/Randomizers/*.cs
-!code/SynthDet/SynthDet/Assets/Scripts/RandomizerTags/*.cs
-code/SynthDet/SynthDet/Assets/Scripts/Randomizers/*.meta
-code/SynthDet/SynthDet/Assets/Scripts/RandomizerTags/*.meta
+*.meta
 
