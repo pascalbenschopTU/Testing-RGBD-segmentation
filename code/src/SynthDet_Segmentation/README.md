@@ -37,3 +37,8 @@ python .\compare_results.py --model_a_path .\checkpoints\SynthDet_gems_light_col
 
 python .\compare_results.py --model_a_path ..\..\DFormer\checkpoints\SynthDet_gems_light_color_DFormer-Tiny_20240205-125951\ --model_b_path .\checkpoints\SynthDet_gems_light_color_Segmodelc4_20240205-120328\ --dir_dataset ..\..\DFormer\datasets\SynthDet_gems_light_color\ --channels_a 4 --channels_b 4 --config config.SynthDet_gems_light_color_Segmodel
 ```
+
+
+## Training
+
+python .\smart_train.py --config config.SynthDet_controle_Dformer_Tiny --channels 4

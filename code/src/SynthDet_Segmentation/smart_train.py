@@ -8,7 +8,7 @@ import cv2
 
 from tqdm import tqdm
 sys.path.append("../../DFormer/utils/dataloader/")
-from smart_model import SmartPeripheralRGBDModel, SmallUNet
+from smart_model import SmartPeripheralRGBDModel, SmallUNet, SmartDepthModel
 from RGBXDataset import RGBXDataset
 from smart_dataloader import get_train_loader, get_val_loader
 from utils import group_weight, WarmUpPolyLR
@@ -19,7 +19,8 @@ import torch.nn.init as init
 from tensorboardX import SummaryWriter
 from eval import Metrics
 
-N_CLASSES = 81 #64
+# N_CLASSES = 81
+N_CLASSES = 64
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
@@ -47,8 +48,9 @@ def train(config, args):
     train_loader = get_train_loader(RGBXDataset, config)
     val_loader = get_val_loader(RGBXDataset, config)
     # Create the model
-    model = SmartPeripheralRGBDModel(args.channels, N_CLASSES, criterion=torch.nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background))
+    # model = SmartPeripheralRGBDModel(args.channels, N_CLASSES, criterion=torch.nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background))
     # model = SmallUNet(args.channels, N_CLASSES, criterion=torch.nn.CrossEntropyLoss(reduction='mean'))
+    model = SmartDepthModel(args.channels, N_CLASSES, criterion=torch.nn.CrossEntropyLoss(reduction='mean'), config=config, writer=tb)
     
     # Initialize the weights
     for m in model.modules():
@@ -98,6 +100,10 @@ def train(config, args):
             modal_xs = modal_xs.to(device)
 
             loss = model(imgs, modal_xs, gts)
+
+            if epoch % 10 == 0 and idx == 0 or epoch == 1 and idx == 0:
+                with torch.no_grad():
+                    model(imgs, modal_xs, gts, plot=True, epoch=epoch)
             
             optimizer.zero_grad()
             loss.backward()

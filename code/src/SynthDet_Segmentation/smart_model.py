@@ -4,8 +4,71 @@ import torch.nn as nn
 from skimage.filters import threshold_multiotsu
 import numpy as np
 from torchvision.transforms.functional import gaussian_blur
+from torchvision.utils import make_grid
 
 from segmentation_model import DoubleConvolution, DownSample, UpSample, CropAndConcat
+
+class TensorboardSummary(object):
+    def __init__(self, writer):
+        self.writer = writer
+    
+    def decode_seg_map_sequence(self, label_masks, config=None):
+        rgb_masks = []
+        for label_mask in label_masks:
+            rgb_mask = self.decode_segmap(label_mask, config=config)
+            rgb_masks.append(rgb_mask)
+        rgb_masks = torch.from_numpy(np.array(rgb_masks).transpose([0, 3, 1, 2]))
+        return rgb_masks
+    
+    def decode_segmap(self, label_mask, config=None):
+        """Decode segmentation class labels into a color image
+        Args:
+            label_mask (np.ndarray): an (M,N) array of integer values denoting
+            the class label at each spatial location.
+            plot (bool, optional): whether to show the resulting color image
+            in a figure.
+        Returns:
+            (np.ndarray, optional): the resulting decoded color image.
+        """
+        n_classes = config.num_classes
+        np.random.seed(0)  # Set a fixed seed value
+        label_colours = np.random.randint(0, 256, size=(config.num_classes, 3))
+
+        r = label_mask.copy()
+        g = label_mask.copy()
+        b = label_mask.copy()
+        for ll in range(0, n_classes):
+            r[label_mask == ll] = label_colours[ll, 0]
+            g[label_mask == ll] = label_colours[ll, 1]
+            b[label_mask == ll] = label_colours[ll, 2]
+        rgb = np.zeros((label_mask.shape[0], label_mask.shape[1], 3))
+        rgb[:, :, 0] = r / 255.0
+        rgb[:, :, 1] = g / 255.0
+        rgb[:, :, 2] = b / 255.0
+ 
+        return rgb
+
+    def visualize_image(self, images, depth, target, output, global_step, config=None):
+        grid_image = make_grid(images[:3].clone().cpu().data, 3, normalize=True)
+        self.writer.add_image('Image', grid_image, global_step)
+        grid_image = make_grid(depth[:3].clone().cpu().data, 3, normalize=True)
+        self.writer.add_image('Depth', grid_image, global_step)
+        grid_image = make_grid(self.decode_seg_map_sequence(torch.max(output[:3], 1)[1].detach().cpu().numpy(),
+                                                    config=config), 3, normalize=False, value_range=(0, 255))
+        self.writer.add_image('Seg_Predicted_label', grid_image, global_step)
+        grid_image = make_grid(self.decode_seg_map_sequence(torch.squeeze(target[:3], 1).detach().cpu().numpy(),
+                                                    config=config), 3, normalize=False, value_range=(0, 255))
+        self.writer.add_image('Seg_Groundtruth_label', grid_image, global_step)
+
+        grid_image = make_grid((target[:3] == output[:3].argmax(1)).unsqueeze(1).expand(-1, 3, -1, -1), 3, normalize=False, value_range=(0, 1), scale_each=True)
+        self.writer.add_image('Correct', grid_image, global_step)
+
+        softmax_output = torch.nn.functional.softmax(output, dim=1)
+        grid_image = make_grid(torch.std(softmax_output[:3], dim=1).unsqueeze(1), 3, normalize=True, scale_each=True)
+        self.writer.add_image('Softmax_Std', grid_image, global_step)
+
+        grid_image = make_grid(torch.max(softmax_output[:3], dim=1)[0].unsqueeze(1), 3, normalize=True, scale_each=True)
+        self.writer.add_image('Softmax_Max', grid_image, global_step)
 
 class SmallUNet(nn.Module):
     """
@@ -153,7 +216,7 @@ class SmartPeripheralRGBDModel(nn.Module):
             mask = masks[:, m].unsqueeze(1)
             if plot:
                 import matplotlib.pyplot as plt
-                fig, ax = plt.subplots(1, 5, figsize=(20, 5))
+                fig, ax = plt.subplots(2, 5, figsize=(20, 5))
                 ax[0].imshow(rgb[0].permute(1, 2, 0).cpu().numpy())
                 ax[2].imshow(out[0].argmax(0).cpu().numpy())
                 ax[3].imshow((mask[0] * output[0]).argmax(0).cpu().numpy())
@@ -177,18 +240,42 @@ class SmartPeripheralRGBDModel(nn.Module):
         
 
 class SmartDepthModel(nn.Module):
-    def __init__(self, in_channels, out_channels, criterion=nn.CrossEntropyLoss(reduction='mean')):
+    def __init__(self, in_channels, out_channels, criterion=nn.CrossEntropyLoss(reduction='mean'), config=None, writer=None):
         super(SmartDepthModel, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.criterion = criterion
+        self.config=config
+        self.tb_summary = TensorboardSummary(writer)
 
         # self.model = SmallUNet(in_channels, out_channels, criterion)
-        self.backbone_depth = DepthEncoder(in_channels, out_channels)
+        self.backbone_depth = DepthEncoder(1, 64)
+        self.decoder = Decoder(64, out_channels)
 
-    def forward(self, x, label=None):
-        return self.model(x, label=label)
-    
+    # Normalize image data to range [0, 1]
+    def normalize_image(self, image):
+        # Normalize to range [0, 1]
+        image_min = np.min(image)
+        image_max = np.max(image)
+        normalized_image = (image - image_min) / (image_max - image_min)
+        return normalized_image
+
+    def forward(self, rgb, modal_x, label=None, plot=False, epoch=0):
+        depth = modal_x[:, 0, :, :].unsqueeze(1)
+        features = self.backbone_depth(depth)
+        output = self.decoder(features)
+
+        if plot:
+            with torch.no_grad():
+                # tb.add_image('Softmax Outputs', softmax_outputs, epoch)
+                self.tb_summary.visualize_image(rgb, depth, label, output, epoch, self.config)
+
+            
+        if label is not None:
+            loss = self.criterion(output, label.long())
+            return loss
+        else:
+            return output 
 
 
 class DepthEncoder(nn.Module):
@@ -197,22 +284,31 @@ class DepthEncoder(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
 
-        self.encoder = nn.Sequential(
-            InceptionBlock(in_channels, 32),
-            InceptionBlock(32, 64),
-            InceptionBlock(128, 256),
-            InceptionBlock(256, out_channels),
+        self.small_encoder = nn.Sequential(
+            nn.MaxPool2d(kernel_size=2),
+            InceptionBlock(in_channels, 16),
+            nn.MaxPool2d(kernel_size=2),
+            InceptionBlock(16, 32),
         )
 
+        self.middle_conv = nn.Conv2d(32, out_channels, kernel_size=3, padding=1)
+
     def forward(self, x):
-        return self.encoder(x)
+        enc = self.small_encoder(x)
+
+        return self.middle_conv(enc)
+
 
 class InceptionBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(InceptionBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1)
-        self.conv2 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(in_channels, out_channels, kernel_size=5, padding=2)
+        assert out_channels % 4 == 0, "out_channels must be divisible by 4"
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        self.conv1 = nn.Conv2d(in_channels, int(out_channels / 4), kernel_size=1)
+        self.conv2 = nn.Conv2d(in_channels, int(out_channels / 4), kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(in_channels, int(out_channels / 2), kernel_size=5, padding=2)
         self.relu = nn.ReLU()
 
     def forward(self, x):
@@ -223,3 +319,19 @@ class InceptionBlock(nn.Module):
         out = self.relu(out)
         return out
         
+
+class Decoder(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(Decoder, self).__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(in_channels, 64, kernel_size=2, stride=2),
+            InceptionBlock(in_channels, 64),
+            nn.ConvTranspose2d(64, out_channels, kernel_size=2, stride=2),
+            InceptionBlock(64, out_channels),
+        )
+
+    def forward(self, x):
+        return self.decoder(x)

@@ -7,6 +7,9 @@ sys.path.append('../../DFormer/utils/')
 
 from transforms import generate_random_crop_pos, random_crop_pad_to_shape, normalize
 
+def resize_image(image, size):
+    return cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)
+
 def random_mirror(rgb, gt, modal_x):
     if random.random() >= 0.5:
         rgb = cv2.flip(rgb, 1)
@@ -74,6 +77,11 @@ class Pre(object):
     def __call__(self, rgb, gt, modal_x):
         if len(rgb.shape) != 3 or len(modal_x.shape) != 3:
             raise ValueError(f"Invalid shapes: rgb={rgb.shape}, modal_x={modal_x.shape}")
+        
+        # Crop the images to config.image_height x config.image_width
+        rgb = resize_image(rgb, (self.config.image_height, self.config.image_width))
+        modal_x = resize_image(modal_x, (self.config.image_height, self.config.image_width))
+        gt = resize_image(gt, (self.config.image_height, self.config.image_width))
         
         rgb = self.normalize(rgb, self.norm_mean, self.norm_std)
         if self.sign:
