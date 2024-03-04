@@ -49,8 +49,8 @@ def train(config, args):
     val_loader = get_val_loader(RGBXDataset, config)
     # Create the model
     # model = SmartPeripheralRGBDModel(args.channels, N_CLASSES, criterion=torch.nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background))
-    # model = SmallUNet(args.channels, N_CLASSES, criterion=torch.nn.CrossEntropyLoss(reduction='mean'))
-    model = SmartDepthModel(args.channels, N_CLASSES, criterion=torch.nn.CrossEntropyLoss(reduction='mean'), config=config, writer=tb)
+    model = SmallUNet(args.channels, N_CLASSES, criterion=torch.nn.CrossEntropyLoss(reduction='mean'), config=config, writer=tb)
+    # model = SmartDepthModel(args.channels, N_CLASSES, criterion=torch.nn.CrossEntropyLoss(reduction='mean'), config=config, writer=tb)
     
     # Initialize the weights
     for m in model.modules():

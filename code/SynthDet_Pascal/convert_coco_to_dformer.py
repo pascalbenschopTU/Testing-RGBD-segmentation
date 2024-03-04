@@ -167,9 +167,10 @@ class AdaptiveDatasetCreator:
         os.makedirs(os.path.join(save_location, 'RGB'), exist_ok=True)
         os.makedirs(os.path.join(save_location, 'Depth'), exist_ok=True)
         os.makedirs(os.path.join(save_location, 'labels'), exist_ok=True)
+        os.makedirs(os.path.join(save_location, 'Grayscale'), exist_ok=True)
 
         # Create directories for the different types of depth images
-        os.makedirs(os.path.join(save_location, 'Depth_black'), exist_ok=True)
+        # os.makedirs(os.path.join(save_location, 'Depth_black'), exist_ok=True)
         
         # os.makedirs(os.path.join(save_location, 'Depth_kinect_noise'), exist_ok=True)
         # os.makedirs(os.path.join(save_location, 'Depth_noise'), exist_ok=True)
@@ -213,6 +214,13 @@ class AdaptiveDatasetCreator:
     def convert_and_save_depth_black(self, file_name):
         depth_black_image = Image.new('L', self.image_size, 0)
         depth_black_image.save(os.path.join(self.save_location, f"Depth_black/{file_name}.png"))
+
+    def convert_and_save_grayscale(self, rgb_data, file_name):
+        rgb_image = rgb_data[0].numpy()
+        rgb_image = (rgb_image * 255).astype('uint8')
+        rgb_image = Image.fromarray(rgb_image.transpose(1, 2, 0))
+        rgb_image = rgb_image.convert('L')
+        rgb_image.save(os.path.join(self.save_location, f"Grayscale/{file_name}.png"))
 
     def convert_and_save_depth_kinect_noise(self, depth_data, file_name):
         depth_data = depth_data.squeeze(1)
@@ -259,7 +267,8 @@ class AdaptiveDatasetCreator:
             self.convert_and_save_RGB(rgb_data, f"train_{batch_idx}")
             self.convert_and_save_label(label, f"train_{batch_idx}")
             self.convert_and_save_depth(depth_data, f"train_{batch_idx}")
-            self.convert_and_save_depth_black(f"train_{batch_idx}")
+            self.convert_and_save_grayscale(rgb_data, f"train_{batch_idx}")
+            # self.convert_and_save_depth_black(f"train_{batch_idx}")
             # self.convert_and_save_depth_compressed(depth_data, f"train_{batch_idx}")
             # self.convert_and_save_depth_kinect_noise(depth_data, f"train_{batch_idx}")
             # self.convert_and_save_depth_noise(depth_data, f"train_{batch_idx}", noise_factor=10)
@@ -273,7 +282,8 @@ class AdaptiveDatasetCreator:
             self.convert_and_save_RGB(rgb_data, f"test_{batch_idx}")
             self.convert_and_save_label(label, f"test_{batch_idx}")
             self.convert_and_save_depth(depth_data, f"test_{batch_idx}")
-            self.convert_and_save_depth_black(f"test_{batch_idx}")
+            self.convert_and_save_grayscale(rgb_data, f"test_{batch_idx}")
+            # self.convert_and_save_depth_black(f"test_{batch_idx}")
             # self.convert_and_save_depth_compressed(depth_data, f"test_{batch_idx}")
             # self.convert_and_save_depth_kinect_noise(depth_data, f"test_{batch_idx}")
             # self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=10)

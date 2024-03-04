@@ -85,13 +85,16 @@ class SmallUNet(nn.Module):
     At the final layer a $1 \times 1$ convolution is used to map each 64-component feature vector to the desired number of classes.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, criterion=nn.CrossEntropyLoss(reduction='mean')):
+    def __init__(self, in_channels: int, out_channels: int, criterion=nn.CrossEntropyLoss(reduction='mean'), config=None, writer=None):
         """
         :param in_channels: number of input channels
         :param out_channels: number of output channels
         """
         super().__init__()
         self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.config = config
+        self.tb_summary = TensorboardSummary(writer)
 
         # Double convolution layers for the contracting path.
         # The number of features gets doubled at each step starting from $64$.
@@ -147,18 +150,23 @@ class SmallUNet(nn.Module):
         # Output layer
         return self.final_conv(x)
 
-    def forward(self, x: torch.Tensor, modal_x: torch.Tensor=None, label: torch.Tensor=None):
+    def forward(self, x: torch.Tensor, modal_x: torch.Tensor=None, label: torch.Tensor=None, plot=False, epoch=0):
         """
         :param x: input tensor
         :param depth: depth tensor
         :return: output tensor
         """
+        rgb = x.clone()
         if modal_x is not None:
             # Here just append the depth map to rgb
             depth = modal_x[:, 0, :, :].unsqueeze(1)
             x = torch.cat([x, depth], dim=1)
 
         output = self.encode_decode(x)
+
+        if plot and modal_x is not None:
+            with torch.no_grad():
+                self.tb_summary.visualize_image(rgb, depth, label, output, epoch, self.config)
 
         if label is not None:
             loss = self.criterion(output, label.long())
@@ -252,6 +260,8 @@ class SmartDepthModel(nn.Module):
         self.backbone_depth = DepthEncoder(1, 64)
         self.decoder = Decoder(64, out_channels)
 
+        self.unet = SmallUNet(3, out_channels, criterion)
+
     # Normalize image data to range [0, 1]
     def normalize_image(self, image):
         # Normalize to range [0, 1]
@@ -263,7 +273,11 @@ class SmartDepthModel(nn.Module):
     def forward(self, rgb, modal_x, label=None, plot=False, epoch=0):
         depth = modal_x[:, 0, :, :].unsqueeze(1)
         features = self.backbone_depth(depth)
-        output = self.decoder(features)
+        depth_output = self.decoder(features)
+
+        rgb_output = self.unet(rgb)
+
+        output = depth_output + rgb_output
 
         if plot:
             with torch.no_grad():

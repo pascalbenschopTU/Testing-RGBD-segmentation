@@ -64,7 +64,7 @@ python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%datase
 set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
 @REM Change the depth of the dataset to black
 move "%new_dataset_path%\Depth" "%new_dataset_path%\Depth_original"
-move "%new_dataset_path%\Depth_black" "%new_dataset_path%\Depth"
+move "%new_dataset_path%\Grayscale" "%new_dataset_path%\Depth"
 
 @REM Train the model
 python utils\train.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --gpus 1
