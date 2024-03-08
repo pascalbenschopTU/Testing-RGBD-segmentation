@@ -1,7 +1,11 @@
 REM This script is used to convert the dataset from SOLO format to COCO format and then to DFormer format
 set dataset_location=%1
 set dataset_name=%2
+set use_gems=%3
 
+IF "%use_gems%"=="" (
+    set use_gems=false
+)
 
 IF EXIST "DFormer\datasets\SynthDet_%dataset_name%" goto :skip_dataset_creation
 
@@ -16,9 +20,13 @@ move "..\data\SynthDet\coco" "..\data\SynthDet\coco_%dataset_name%"
 
 set dataset_path=..\data\SynthDet\coco_%dataset_name%
 
-@REM Convert the dataset to DFormer format
-python convert_coco_to_dformer.py %dataset_path% ..\DFormer\datasets\SynthDet_%dataset_name%
-
+IF %use_gems% == true (
+    @REM Convert the dataset to DFormer format
+    python convert_coco_to_dformer.py %dataset_path% ..\DFormer\datasets\SynthDet_%dataset_name% --gems
+) ELSE (
+    @REM Convert the dataset to DFormer format
+    python convert_coco_to_dformer.py %dataset_path% ..\DFormer\datasets\SynthDet_%dataset_name%
+)
 
 @REM Remove the dataset from the data folder
 rmdir /s /q %dataset_path%
@@ -33,8 +41,13 @@ cd DFormer
 copy local_configs\SynthDet\SynthDet_template_DFormer_Tiny.py local_configs\SynthDet\SynthDet_%dataset_name%_Dformer_Tiny.py
 cd local_configs\SynthDet
 
-@REM Use sed to replace the dataset name in the new file
-powershell -Command "(gc SynthDet_%dataset_name%_Dformer_Tiny.py) -replace 'C.dataset_name = .*', \"C.dataset_name = 'SynthDet_%dataset_name%'\" | Out-File -encoding ASCII SynthDet_%dataset_name%_Dformer_Tiny.py"
+IF %use_gems% == true (
+    @REM Use sed to replace the dataset name and classes in the new file
+    powershell -Command "(gc SynthDet_%dataset_name%_Dformer_Tiny.py) -replace 'C.dataset_name = .*', \"C.dataset_name = 'SynthDet_%dataset_name%'\" -replace 'classes = \"groceries\"', 'classes = \"gems\"' | Out-File -encoding ASCII SynthDet_%dataset_name%_Dformer_Tiny.py"
+) ELSE (
+    @REM Use sed to replace the dataset name in the new file
+    powershell -Command "(gc SynthDet_%dataset_name%_Dformer_Tiny.py) -replace 'C.dataset_name = .*', \"C.dataset_name = 'SynthDet_%dataset_name%'\" | Out-File -encoding ASCII SynthDet_%dataset_name%_Dformer_Tiny.py"
+)
 
 @REM Change back to DFormer
 cd ..\..

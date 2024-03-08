@@ -157,17 +157,22 @@ class KinectNoise:
         return noisy_depth
 
 class AdaptiveDatasetCreator:
-    def __init__(self, dataset_root, save_location, image_size=(480, 480), dataset_split=(0.5, 0.5)):
-        self.dataset_root = dataset_root
-        self.save_location = save_location
+    def __init__(self, args, image_size=(400, 400), dataset_split=(0.5, 0.5)):
+        self.dataset_root = args.dataset_root
+        self.save_location = args.save_location
         self.image_size = image_size
-        self.dataset_split = dataset_split
+        if args.dataset_split is not None:
+            self.dataset_split = args.dataset_split
+        else:
+            self.dataset_split = dataset_split
+
+        self.dataset_gems = args.gems
 
         # Create directories to save the converted dataset
-        os.makedirs(os.path.join(save_location, 'RGB'), exist_ok=True)
-        os.makedirs(os.path.join(save_location, 'Depth'), exist_ok=True)
-        os.makedirs(os.path.join(save_location, 'labels'), exist_ok=True)
-        os.makedirs(os.path.join(save_location, 'Grayscale'), exist_ok=True)
+        os.makedirs(os.path.join(args.save_location, 'RGB'), exist_ok=True)
+        os.makedirs(os.path.join(args.save_location, 'Depth'), exist_ok=True)
+        os.makedirs(os.path.join(args.save_location, 'labels'), exist_ok=True)
+        os.makedirs(os.path.join(args.save_location, 'Grayscale'), exist_ok=True)
 
         # Create directories for the different types of depth images
         # os.makedirs(os.path.join(save_location, 'Depth_black'), exist_ok=True)
@@ -177,10 +182,10 @@ class AdaptiveDatasetCreator:
         # os.makedirs(os.path.join(save_location, 'Depth_compressed'), exist_ok=True)
 
         # Create train.txt and test.txt files
-        with open(os.path.join(save_location, 'train.txt'), 'w'):
+        with open(os.path.join(args.save_location, 'train.txt'), 'w'):
             pass
 
-        with open(os.path.join(save_location, 'test.txt'), 'w'):
+        with open(os.path.join(args.save_location, 'test.txt'), 'w'):
             pass
 
     def convert_and_save_RGB(self, rgb_data, file_name):
@@ -193,6 +198,8 @@ class AdaptiveDatasetCreator:
         label = label.squeeze(1)
         label_image = label[0].numpy()
         label_image = label_image.astype('uint8')
+        if self.dataset_gems:
+            label_image[label_image != 0] = label_image[label_image != 0] - 63
         label_image = Image.fromarray(label_image)
         label_image.save(os.path.join(self.save_location, f"labels/{file_name}.png"))
 
@@ -299,9 +306,10 @@ def main():
     parser.add_argument('dataset_root', help='Path to COCO dataset')
     parser.add_argument('save_location', help='Path to save the converted dataset')
     parser.add_argument('--dataset_split', nargs=2, type=float, default=(0.5, 0.5), help='Train and test split')
+    parser.add_argument('--gems', action='store_true', help='Use GEMS dataset')
     args = parser.parse_args()
     
-    dataset_creator = AdaptiveDatasetCreator(args.dataset_root, args.save_location, dataset_split=args.dataset_split)
+    dataset_creator = AdaptiveDatasetCreator(args, image_size=(400, 400))
     dataset_creator.convert_and_save_dataset()
 
 
