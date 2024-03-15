@@ -3,6 +3,8 @@ set dataset_location=%1
 set dataset_name=%2
 set use_gems=%3
 
+set use_edge_enhancement=true
+
 IF "%use_gems%"=="" (
     set use_gems=false
 )
@@ -26,6 +28,10 @@ IF %use_gems% == true (
 ) ELSE (
     @REM Convert the dataset to DFormer format
     python convert_coco_to_dformer.py %dataset_path% ..\DFormer\datasets\SynthDet_%dataset_name%
+)
+
+IF %use_edge_enhancement% == true (
+    python add_edge_enhancement.py ..\DFormer\datasets\SynthDet_%dataset_name%
 )
 
 @REM Remove the dataset from the data folder

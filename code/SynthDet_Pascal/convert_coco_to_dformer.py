@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import torch
 import torchvision.transforms as transforms
+from torchvision.transforms import InterpolationMode
 from torch.utils.data import DataLoader
 from CocoDepthDataset import CocoDepthDataset
 from PIL import Image
@@ -250,7 +251,7 @@ class AdaptiveDatasetCreator:
     def convert_and_save_dataset(self):
         # Define data transformations
         transform = transforms.Compose([
-            transforms.Resize(self.image_size, interpolation=Image.NEAREST),  # Adjust the size based on your model's input size
+            transforms.Resize(self.image_size, interpolation=InterpolationMode.NEAREST),  # Adjust the size based on your model's input size
             transforms.ToTensor(),
         ])
 
