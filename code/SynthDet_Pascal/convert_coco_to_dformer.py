@@ -168,19 +168,11 @@ class AdaptiveDatasetCreator:
             self.dataset_split = dataset_split
 
         self.dataset_gems = args.gems
+        self.dataset_depth_tests = args.depth_tests
 
-        # Create directories to save the converted dataset
-        os.makedirs(os.path.join(args.save_location, 'RGB'), exist_ok=True)
-        os.makedirs(os.path.join(args.save_location, 'Depth'), exist_ok=True)
-        os.makedirs(os.path.join(args.save_location, 'labels'), exist_ok=True)
-        os.makedirs(os.path.join(args.save_location, 'Grayscale'), exist_ok=True)
-
-        # Create directories for the different types of depth images
-        # os.makedirs(os.path.join(save_location, 'Depth_black'), exist_ok=True)
-        
-        # os.makedirs(os.path.join(save_location, 'Depth_kinect_noise'), exist_ok=True)
-        # os.makedirs(os.path.join(save_location, 'Depth_noise'), exist_ok=True)
-        # os.makedirs(os.path.join(save_location, 'Depth_compressed'), exist_ok=True)
+        # Create the save location if it does not exist
+        if not os.path.exists(args.save_location):
+            os.makedirs(args.save_location, exist_ok=True)
 
         # Create train.txt and test.txt files
         with open(os.path.join(args.save_location, 'train.txt'), 'w'):
@@ -193,6 +185,8 @@ class AdaptiveDatasetCreator:
         rgb_image = rgb_data[0].numpy()
         rgb_image = (rgb_image * 255).astype('uint8')
         rgb_image = Image.fromarray(rgb_image.transpose(1, 2, 0))
+        if not os.path.exists(os.path.join(self.save_location, f"RGB")):
+            os.makedirs(os.path.join(self.save_location, f"RGB"), exist_ok=True)
         rgb_image.save(os.path.join(self.save_location, f"RGB/{file_name}.png"))
     
     def convert_and_save_label(self, label, file_name):
@@ -202,6 +196,8 @@ class AdaptiveDatasetCreator:
         if self.dataset_gems:
             label_image[label_image != 0] = label_image[label_image != 0] - 63
         label_image = Image.fromarray(label_image)
+        if not os.path.exists(os.path.join(self.save_location, f"labels")):
+            os.makedirs(os.path.join(self.save_location, f"labels"), exist_ok=True)
         label_image.save(os.path.join(self.save_location, f"labels/{file_name}.png"))
 
     def convert_and_save_depth(self, depth_data, file_name):
@@ -209,6 +205,8 @@ class AdaptiveDatasetCreator:
         depth_data = depth_data[0].numpy()
         depth_data = (depth_data * 255).astype('uint8')
         depth_image = Image.fromarray(depth_data)
+        if not os.path.exists(os.path.join(self.save_location, f"Depth")):
+            os.makedirs(os.path.join(self.save_location, f"Depth"), exist_ok=True)
         depth_image.save(os.path.join(self.save_location, f"Depth/{file_name}.png"))
 
     def convert_and_save_depth_compressed(self, depth_data, file_name, compression_factor=0.5):
@@ -217,17 +215,17 @@ class AdaptiveDatasetCreator:
         compressed_depth_data = np.power(depth_data / 255.0, compression_factor)
         compressed_depth_image = (compressed_depth_data * 255).astype('uint8')
         compressed_depth_image = Image.fromarray(compressed_depth_image)
+        if not os.path.exists(os.path.join(self.save_location, f"Depth_compressed")):
+            os.makedirs(os.path.join(self.save_location, f"Depth_compressed"), exist_ok=True)
         compressed_depth_image.save(os.path.join(self.save_location, f"Depth_compressed/{file_name}.png"))
-
-    def convert_and_save_depth_black(self, file_name):
-        depth_black_image = Image.new('L', self.image_size, 0)
-        depth_black_image.save(os.path.join(self.save_location, f"Depth_black/{file_name}.png"))
 
     def convert_and_save_grayscale(self, rgb_data, file_name):
         rgb_image = rgb_data[0].numpy()
         rgb_image = (rgb_image * 255).astype('uint8')
         rgb_image = Image.fromarray(rgb_image.transpose(1, 2, 0))
         rgb_image = rgb_image.convert('L')
+        if not os.path.exists(os.path.join(self.save_location, f"Grayscale")):
+            os.makedirs(os.path.join(self.save_location, f"Grayscale"), exist_ok=True)
         rgb_image.save(os.path.join(self.save_location, f"Grayscale/{file_name}.png"))
 
     def convert_and_save_depth_kinect_noise(self, depth_data, file_name):
@@ -236,6 +234,8 @@ class AdaptiveDatasetCreator:
         depth_data = KinectNoise().create_noisy_depth(depth_data)
         depth_data = (depth_data * 255).astype('uint8')
         depth_image = Image.fromarray(depth_data)
+        if not os.path.exists(os.path.join(self.save_location, f"Depth_kinect_noise")):
+            os.makedirs(os.path.join(self.save_location, f"Depth_kinect_noise"), exist_ok=True)
         depth_image.save(os.path.join(self.save_location, f"Depth_kinect_noise/{file_name}.png"))
 
 
@@ -245,7 +245,9 @@ class AdaptiveDatasetCreator:
         noisy_depth_data = np.clip(depth_data + np.random.normal(scale=noise_factor, size=depth_data.shape), 0.0, 1.0)
         noisy_depth_data = (noisy_depth_data * 255).astype('uint8')
         noisy_depth_image = Image.fromarray(noisy_depth_data)
-        noisy_depth_image.save(os.path.join(self.save_location, f"Depth_noise/{file_name}.png"))
+        if not os.path.exists(os.path.join(self.save_location, f"Depth_noise_{str(noise_factor)}")):
+            os.makedirs(os.path.join(self.save_location, f"Depth_noise_{str(noise_factor)}"), exist_ok=True)
+        noisy_depth_image.save(os.path.join(self.save_location, f"Depth_noise_{str(noise_factor)}/{file_name}.png"))
 
 
     def convert_and_save_dataset(self):
@@ -276,10 +278,13 @@ class AdaptiveDatasetCreator:
             self.convert_and_save_label(label, f"train_{batch_idx}")
             self.convert_and_save_depth(depth_data, f"train_{batch_idx}")
             self.convert_and_save_grayscale(rgb_data, f"train_{batch_idx}")
-            # self.convert_and_save_depth_black(f"train_{batch_idx}")
-            # self.convert_and_save_depth_compressed(depth_data, f"train_{batch_idx}")
-            # self.convert_and_save_depth_kinect_noise(depth_data, f"train_{batch_idx}")
-            # self.convert_and_save_depth_noise(depth_data, f"train_{batch_idx}", noise_factor=10)
+            if self.dataset_depth_tests:
+                self.convert_and_save_depth_compressed(depth_data, f"train_{batch_idx}")
+                self.convert_and_save_depth_kinect_noise(depth_data, f"train_{batch_idx}")
+                self.convert_and_save_depth_noise(depth_data, f"train_{batch_idx}", noise_factor=0.1)
+                self.convert_and_save_depth_noise(depth_data, f"train_{batch_idx}", noise_factor=0.5)
+                self.convert_and_save_depth_noise(depth_data, f"train_{batch_idx}", noise_factor=0.9)
+            
 
             # add a line to train.txt with the path to the RGB image and the path to the depth image
             # Example: RGB/train_0.jpg labels/train_0.png
@@ -291,10 +296,12 @@ class AdaptiveDatasetCreator:
             self.convert_and_save_label(label, f"test_{batch_idx}")
             self.convert_and_save_depth(depth_data, f"test_{batch_idx}")
             self.convert_and_save_grayscale(rgb_data, f"test_{batch_idx}")
-            # self.convert_and_save_depth_black(f"test_{batch_idx}")
-            # self.convert_and_save_depth_compressed(depth_data, f"test_{batch_idx}")
-            # self.convert_and_save_depth_kinect_noise(depth_data, f"test_{batch_idx}")
-            # self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=10)
+            if self.dataset_depth_tests:
+                self.convert_and_save_depth_compressed(depth_data, f"test_{batch_idx}")
+                self.convert_and_save_depth_kinect_noise(depth_data, f"test_{batch_idx}")
+                self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.1)
+                self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.5)
+                self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.9)
 
             # add a line to test.txt with the path to the RGB image and the path to the depth image
             # Example: RGB/test_0.jpg labels/test_0.png
@@ -308,6 +315,7 @@ def main():
     parser.add_argument('save_location', help='Path to save the converted dataset')
     parser.add_argument('--dataset_split', nargs=2, type=float, default=(0.5, 0.5), help='Train and test split')
     parser.add_argument('--gems', action='store_true', help='Use GEMS dataset')
+    parser.add_argument('--depth_tests', action='store_true', help='Add extra depth test datasets')
     args = parser.parse_args()
     
     dataset_creator = AdaptiveDatasetCreator(args, image_size=(400, 400))

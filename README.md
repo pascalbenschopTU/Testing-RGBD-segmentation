@@ -11,10 +11,22 @@ clone SynthDet from unity: https://github.com/Unity-Technologies/SynthDet
 Run simulations via Unity, enable depth labeler.
 
 Activate conda environment:
+
+Step 1
 ```
 conda env create -f environment.yaml
+```
+If an error occurs with something like: `An error occurred while installing package 'defaults::xz-5.4.5-h8cc25b3_0'.
+Rolling back transaction: done`
 
+Then do `conda env remove --name python_environment` and `conda env create -f environment.yaml`
+
+Step 2
+```
 conda activate python_environment
+
+pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 --extra-index-url https://download.pytorch.org/whl/cu113
+pip install mmcv-full -f https://download.openmmlab.com/mmcv/dist/cu113/torch1.11/index.html
 ```
 
 Navigate to Synthdet_Pascal
@@ -39,16 +51,9 @@ python convert_coco_to_dformer.py ..\data\SynthDet\coco\ ..\DFormer\datasets\Syn
 
 ### Training
 
-Navigate to DFormer_Pascal repository and activate the dformer environment
-```
-conda env create -f dformer_environment.yaml
-
-conda activate dformer
-```
-
 Navigate to DFormer repository
 ```
-python .\utils\train.py --config=local_configs.SynthDet.SynthDet_DFormer_Tiny --gpus 1
+python .\utils\train.py --config=local_configs.SynthDet.SynthDet_{dataset_name}_DFormer_Tiny --gpus 1
 ```
 
 
@@ -81,26 +86,11 @@ python .\pytorch-deeplab-xception\train.py --config DFormer.local_configs.SUNRGB
 ```
 
 
-## MNIST
-
-### Setup
-Download and install conda.
-
-`conda env create -f .\environment.yaml`
-
-`conda activate python_environment`
-
-### Running
-Go to `code/src/MNIST` and run ```python main.py``` 
-
-
 ## Sources
 
-
+[SynthDet](https://github.com/Unity-Technologies/SynthDet)
 [2.5 Malleable Convolution](https://github.com/charlesCXK/RGBD_Semantic_Segmentation_PyTorch)
 
-training data?
-https://github.com/Barchid/RGBD-Seg/blob/master/train.py 
 
 Apparently bincount is very slow with a lot of the same class https://discuss.pytorch.org/t/torch-bincount-1000x-slower-on-cuda/42654/2 
 
