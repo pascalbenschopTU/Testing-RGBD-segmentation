@@ -24,6 +24,8 @@ Date, meeting
 -, Re-training DFormer on SUNRGBD dataset without pretrained weights
 -, Considerably lower results without pretrained weights: DFormer needs pretrained weights?
 -, Setting up scripts to execute SynthDet experiments in one go: Unity -> create dataset -> run script
+-, Running all experiments on SynthDet dataset in modalities RGB-Grayscale and RGB-Depth with DFormer-Tiny
+-, Results: DFormer-Tiny performs better on RGB-Depth than RGB-Grayscale for all experiments 
 11/04/24, Student meeting presentation 1
 29/04/24, Green Light Evaluation
 06/06/24, Student meeting presentation 2

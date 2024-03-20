@@ -3,7 +3,7 @@ set dataset_location=%1
 set dataset_name=%2
 set use_gems=%3
 
-set use_edge_enhancement=true
+set use_edge_enhancement=false
 
 IF "%use_gems%"=="" (
     set use_gems=false
@@ -33,6 +33,11 @@ IF %use_gems% == true (
 IF %use_edge_enhancement% == true (
     python add_edge_enhancement.py ..\DFormer\datasets\SynthDet_%dataset_name%
 )
+
+@REM Comment if not testing on depth
+@REM set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
+@REM move "%new_dataset_path%\Depth" "%new_dataset_path%\Depth_original"
+@REM move "%new_dataset_path%\Depth_kinect_noise" "%new_dataset_path%\Depth"
 
 @REM Remove the dataset from the data folder
 rmdir /s /q %dataset_path%
@@ -81,9 +86,13 @@ set rgb_depth_model_weights=checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\%la
 python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --model_weights %rgb_depth_model_weights%
 
 set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
-@REM Change the depth of the dataset to black
 move "%new_dataset_path%\Depth" "%new_dataset_path%\Depth_original"
 move "%new_dataset_path%\Grayscale" "%new_dataset_path%\Depth"
+
+@REM Comment if not testing on depth
+@REM move "%new_dataset_path%\Depth" "%new_dataset_path%\Depth_kinect_noise"
+@REM move "%new_dataset_path%\Depth_compressed" "%new_dataset_path%\Depth"
+
 
 @REM Train the model
 python utils\train.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --gpus 1

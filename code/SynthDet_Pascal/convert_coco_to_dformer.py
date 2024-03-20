@@ -265,7 +265,7 @@ class AdaptiveDatasetCreator:
         train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
         # Define the number of workers for parallel data loading
-        num_workers = int(multiprocessing.cpu_count() / 2)
+        num_workers = 16
         print(f"Using {num_workers} workers for data loading")
 
         # Define data loaders
