@@ -5,6 +5,8 @@ set use_gems=%3
 
 set use_edge_enhancement=false
 
+set checkpoint_dir=checkpoints
+
 IF "%use_gems%"=="" (
     set use_gems=false
 )
@@ -64,24 +66,24 @@ IF %use_gems% == true (
 cd ..\..
 
 @REM Train the model
-python utils\train.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --gpus 1
+python utils\train.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --gpus 1 --checkpoint_dir %checkpoint_dir%
 
 @REM Create prediction mious for the dataset with RGB-Depth
 
 REM Get the last directory starting with "run" from the given path
-for /f "delims=" %%d in ('dir /b /ad /on checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\run*') do (
+for /f "delims=" %%d in ('dir /b /ad /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\run*') do (
     set "last_directory=%%d"
 )
 
 REM Get the last filename starting with "epoch" in the last directory
-for /f "delims=" %%f in ('dir /b /a-d /on checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\epoch*') do (
+for /f "delims=" %%f in ('dir /b /a-d /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\epoch*') do (
     set "last_filename=%%f"
 )
 
 echo Last directory: %last_directory%
 echo Last filename: %last_filename%
 
-set rgb_depth_model_weights=checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
+set rgb_depth_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
 
 python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --model_weights %rgb_depth_model_weights%
 
@@ -93,27 +95,35 @@ move "%new_dataset_path%\Grayscale" "%new_dataset_path%\Depth"
 @REM move "%new_dataset_path%\Depth" "%new_dataset_path%\Depth_kinect_noise"
 @REM move "%new_dataset_path%\Depth_compressed" "%new_dataset_path%\Depth"
 
+@REM @REM Comment if not testing on depth
+@REM set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
+@REM @REM Go to SynthDet_Pasal
+@REM cd ..\SynthDet_Pascal
+@REM python create_three_channel_depth.py %new_dataset_path%
+@REM @REM Go back to DFormer
+@REM cd ..\DFormer
+
 
 @REM Train the model
-python utils\train.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --gpus 1
+python utils\train.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --gpus 1 --checkpoint_dir %checkpoint_dir%
 
 
 @REM Create prediction mious for the dataset with RGB-Black
 
 REM Get the last directory starting with "run" from the given path
-for /f "delims=" %%d in ('dir /b /ad /on checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\run*') do (
+for /f "delims=" %%d in ('dir /b /ad /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\run*') do (
     set "last_directory=%%d"
 )
 
 REM Get the last filename starting with "epoch" in the last directory
-for /f "delims=" %%f in ('dir /b /a-d /on checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\epoch*') do (
+for /f "delims=" %%f in ('dir /b /a-d /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\epoch*') do (
     set "last_filename=%%f"
 )
 
 echo Last directory: %last_directory%
 echo Last filename: %last_filename%
 
-set rgb_black_model_weights=checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
+set rgb_black_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
 
 python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --model_weights %rgb_black_model_weights%
 
@@ -122,4 +132,4 @@ python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%datase
 python utils\create_predictions.py --model_a_path %rgb_black_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny
 
 @REM Create gen_results.txt and store the last command
-echo utils\create_predictions.py --model_a_path %rgb_black_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny > checkpoints\SynthDet_%dataset_name%_DFormer-Tiny\gen_results.txt
+echo utils\create_predictions.py --model_a_path %rgb_black_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny > %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\gen_results.txt
