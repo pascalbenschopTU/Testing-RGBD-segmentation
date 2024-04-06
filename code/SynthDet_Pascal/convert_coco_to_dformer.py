@@ -168,6 +168,7 @@ class AdaptiveDatasetCreator:
             self.dataset_split = dataset_split
 
         self.dataset_gems = args.gems
+        self.dataset_cars = args.cars
         self.dataset_depth_tests = args.depth_tests
 
         # Create the save location if it does not exist
@@ -195,6 +196,8 @@ class AdaptiveDatasetCreator:
         label_image = label_image.astype('uint8')
         if self.dataset_gems:
             label_image[label_image != 0] = label_image[label_image != 0] - 63
+        if self.dataset_cars:
+            label_image[label_image != 0] = label_image[label_image != 0] - 79
         label_image = Image.fromarray(label_image)
         if not os.path.exists(os.path.join(self.save_location, f"labels")):
             os.makedirs(os.path.join(self.save_location, f"labels"), exist_ok=True)
@@ -315,6 +318,7 @@ def main():
     parser.add_argument('save_location', help='Path to save the converted dataset')
     parser.add_argument('--dataset_split', nargs=2, type=float, default=(0.5, 0.5), help='Train and test split')
     parser.add_argument('--gems', action='store_true', help='Use GEMS dataset')
+    parser.add_argument('--cars', action='store_true', help='Use CARS dataset')
     parser.add_argument('--depth_tests', action='store_true', help='Add extra depth test datasets')
     args = parser.parse_args()
     

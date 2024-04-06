@@ -2,7 +2,6 @@ REM This script is used to convert the dataset from SOLO format to COCO format a
 set dataset_location=%1
 set dataset_name=%2
 set use_gems=%3
-set use_cars=%4
 
 set use_edge_enhancement=false
 
@@ -10,10 +9,6 @@ set checkpoint_dir=checkpoints
 
 IF "%use_gems%"=="" (
     set use_gems=false
-)
-
-IF "%use_cars%"=="" (
-    set use_cars=false
 )
 
 IF EXIST "DFormer\datasets\SynthDet_%dataset_name%" goto :skip_dataset_creation
@@ -33,13 +28,8 @@ IF %use_gems% == true (
     @REM Convert the dataset to DFormer format
     python convert_coco_to_dformer.py %dataset_path% ..\DFormer\datasets\SynthDet_%dataset_name% --gems
 ) ELSE (
-    IF %use_cars% == true (
-        @REM Convert the dataset to DFormer format
-        python convert_coco_to_dformer.py %dataset_path% ..\DFormer\datasets\SynthDet_%dataset_name% --cars
-    ) ELSE (
-        @REM Convert the dataset to DFormer format
-        python convert_coco_to_dformer.py %dataset_path% ..\DFormer\datasets\SynthDet_%dataset_name%
-    )
+    @REM Convert the dataset to DFormer format
+    python convert_coco_to_dformer.py %dataset_path% ..\DFormer\datasets\SynthDet_%dataset_name%
 )
 
 IF %use_edge_enhancement% == true (
@@ -55,6 +45,11 @@ cd ..\DFormer
 :skip_dataset_creation
 cd DFormer
 
+@REM Comment if not testing on depth
+set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
+move "%new_dataset_path%\Depth" "%new_dataset_path%\Grayscale"
+move "%new_dataset_path%\depth_predictions" "%new_dataset_path%\Depth"
+
 @REM Copy the template file to the new file
 copy local_configs\SynthDet\SynthDet_template_DFormer_Tiny.py local_configs\SynthDet\SynthDet_%dataset_name%_Dformer_Tiny.py
 cd local_configs\SynthDet
@@ -63,13 +58,8 @@ IF %use_gems% == true (
     @REM Use sed to replace the dataset name and classes in the new file
     powershell -Command "(gc SynthDet_%dataset_name%_Dformer_Tiny.py) -replace 'C.dataset_name = .*', \"C.dataset_name = 'SynthDet_%dataset_name%'\" -replace 'classes = \"groceries\"', 'classes = \"gems\"' | Out-File -encoding ASCII SynthDet_%dataset_name%_Dformer_Tiny.py"
 ) ELSE (
-    IF %use_cars% == true (
-        @REM Use sed to replace the dataset name and classes in the new file
-        powershell -Command "(gc SynthDet_%dataset_name%_Dformer_Tiny.py) -replace 'C.dataset_name = .*', \"C.dataset_name = 'SynthDet_%dataset_name%'\" -replace 'classes = \"groceries\"', 'classes = \"cars\"' | Out-File -encoding ASCII SynthDet_%dataset_name%_Dformer_Tiny.py"
-    ) ELSE (
-        @REM Use sed to replace the dataset name in the new file
-        powershell -Command "(gc SynthDet_%dataset_name%_Dformer_Tiny.py) -replace 'C.dataset_name = .*', \"C.dataset_name = 'SynthDet_%dataset_name%'\" | Out-File -encoding ASCII SynthDet_%dataset_name%_Dformer_Tiny.py"
-    )
+    @REM Use sed to replace the dataset name in the new file
+    powershell -Command "(gc SynthDet_%dataset_name%_Dformer_Tiny.py) -replace 'C.dataset_name = .*', \"C.dataset_name = 'SynthDet_%dataset_name%'\" | Out-File -encoding ASCII SynthDet_%dataset_name%_Dformer_Tiny.py"
 )
 
 @REM Change back to DFormer
@@ -98,8 +88,9 @@ set rgb_depth_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tin
 python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny --model_weights %rgb_depth_model_weights%
 
 set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
-move "%new_dataset_path%\Depth" "%new_dataset_path%\Depth_original"
-move "%new_dataset_path%\Grayscale" "%new_dataset_path%\Depth"
+move "%new_dataset_path%\Depth" "%new_dataset_path%\depth_predictions"
+move "%new_dataset_path%\Depth_original" "%new_dataset_path%\Depth"
+move "%new_dataset_path%\depth_predictions" "%new_dataset_path%\Depth_original"
 
 
 @REM Train the model
@@ -130,4 +121,4 @@ python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%datase
 python utils\create_predictions.py --model_a_path %rgb_black_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny
 
 @REM Create gen_results.txt and store the last command
-echo utils\create_predictions.py --model_a_path %rgb_black_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny > %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\gen_results.txt
+echo utils\create_predictions.py --model_a_path %rgb_black_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_Dformer_Tiny >> %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\gen_results.txt
