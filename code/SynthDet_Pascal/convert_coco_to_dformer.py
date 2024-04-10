@@ -159,6 +159,7 @@ class KinectNoise:
 
 class AdaptiveDatasetCreator:
     def __init__(self, args, image_size=(400, 400), dataset_split=(0.5, 0.5)):
+        self.test_mode = args.test_mode
         self.dataset_root = args.dataset_root
         self.save_location = args.save_location
         self.image_size = image_size
@@ -262,10 +263,31 @@ class AdaptiveDatasetCreator:
 
         dataset = CocoDepthDataset(os.path.join(self.dataset_root, 'images'), os.path.join(self.dataset_root, 'semantic.json'), os.path.join(self.dataset_root, 'depth'), transform=transform)
 
+        if self.test_mode:
+            num_workers = 16
+            test_dataset = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=num_workers)
+            for batch_idx, (rgb_data, depth_data, label) in enumerate(test_dataset):
+                self.convert_and_save_RGB(rgb_data, f"test_{batch_idx}")
+                self.convert_and_save_label(label, f"test_{batch_idx}")
+                self.convert_and_save_depth(depth_data, f"test_{batch_idx}")
+                self.convert_and_save_grayscale(rgb_data, f"test_{batch_idx}")
+                if self.dataset_depth_tests:
+                    self.convert_and_save_depth_compressed(depth_data, f"test_{batch_idx}")
+                    self.convert_and_save_depth_kinect_noise(depth_data, f"test_{batch_idx}")
+                    self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.1)
+                    self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.5)
+                    self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.9)
+
+                # add a line to test.txt with the path to the RGB image and the path to the depth image
+                # Example: RGB/test_0.jpg labels/test_0.png
+                with open(os.path.join(self.save_location, 'test.txt'), 'a') as test_file:
+                    test_file.write(f"RGB/test_{batch_idx}.png labels/test_{batch_idx}.png\n")
+            return
         # Split dataset into training and validation sets
         train_size = int(len(dataset) * self.dataset_split[0])
         test_size = len(dataset) - train_size
-        train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+        train_dataset = torch.utils.data.Subset(dataset, list(range(train_size)))
+        test_dataset = torch.utils.data.Subset(dataset, list(range(train_size, train_size + test_size)))
 
         # Define the number of workers for parallel data loading
         num_workers = 16
@@ -320,6 +342,7 @@ def main():
     parser.add_argument('--gems', action='store_true', help='Use GEMS dataset')
     parser.add_argument('--cars', action='store_true', help='Use CARS dataset')
     parser.add_argument('--depth_tests', action='store_true', help='Add extra depth test datasets')
+    parser.add_argument('--test_mode', action='store_true', help='Only create test dataset')
     args = parser.parse_args()
     
     dataset_creator = AdaptiveDatasetCreator(args, image_size=(400, 400))
