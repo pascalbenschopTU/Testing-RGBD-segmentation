@@ -168,8 +168,8 @@ class AdaptiveDatasetCreator:
         else:
             self.dataset_split = dataset_split
 
-        self.dataset_gems = args.gems
-        self.dataset_cars = args.cars
+        self.dataset_gems = args.dataset_type == 'gems' or args.dataset_type == 'gems_cars'
+        self.dataset_cars = args.dataset_type == 'cars'
         self.dataset_depth_tests = args.depth_tests
 
         # Create the save location if it does not exist
@@ -338,9 +338,8 @@ def main():
     parser = argparse.ArgumentParser(description='Convert COCO dataset to DFormer dataset')
     parser.add_argument('dataset_root', help='Path to COCO dataset')
     parser.add_argument('save_location', help='Path to save the converted dataset')
+    parser.add_argument('dataset_type', default="groceries", help='Type of dataset to convert')
     parser.add_argument('--dataset_split', nargs=2, type=float, default=(0.5, 0.5), help='Train and test split')
-    parser.add_argument('--gems', action='store_true', help='Use GEMS dataset')
-    parser.add_argument('--cars', action='store_true', help='Use CARS dataset')
     parser.add_argument('--depth_tests', action='store_true', help='Add extra depth test datasets')
     parser.add_argument('--test_mode', action='store_true', help='Only create test dataset')
     args = parser.parse_args()
