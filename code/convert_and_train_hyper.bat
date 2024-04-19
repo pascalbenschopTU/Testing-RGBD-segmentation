@@ -2,6 +2,7 @@ REM This script is used to convert the dataset from SOLO format to COCO format a
 set dataset_location=%1
 set dataset_name=%2
 set dataset_type=%3
+set hyperparam_epochs=%4
 
 set use_edge_enhancement=false
 
@@ -9,6 +10,10 @@ set checkpoint_dir=checkpoints
 
 IF %dataset_type% == "" (
     set dataset_type=groceries
+)
+
+IF %hyperparam_epochs% == "" (
+    set hyperparam_epochs=5
 )
 
 IF EXIST "DFormer\datasets\SynthDet_%dataset_name%" goto :skip_dataset_creation
@@ -47,7 +52,7 @@ cd local_configs\SynthDet
 cd ..\..
 
 @REM Train the model
-python utils\train_clean.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --gpus 1 --checkpoint_dir %checkpoint_dir% --dataset_type %dataset_type% --x_channels=3 --x_e_channels=1
+python utils\train_clean.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --gpus 1 --checkpoint_dir %checkpoint_dir% --dataset_type %dataset_type% --x_channels=3 --x_e_channels=1 --num_hyperparameter_epochs %hyperparam_epochs%
 
 @REM Create prediction mious for the dataset with RGB-Depth
 
@@ -74,7 +79,7 @@ xcopy "%new_dataset_path%\RGB" "%new_dataset_path%\Depth" /E /I /Y
 
 
 @REM Train the model
-python utils\train_clean.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --gpus 1 --checkpoint_dir %checkpoint_dir% --dataset_type %dataset_type% --x_channels=3 --x_e_channels=3
+python utils\train_clean.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --gpus 1 --checkpoint_dir %checkpoint_dir% --dataset_type %dataset_type% --x_channels=3 --x_e_channels=3 --num_hyperparameter_epochs %hyperparam_epochs%
 
 
 @REM Create prediction mious for the dataset with RGB-Black
@@ -99,16 +104,16 @@ python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%datase
 
 @REM Evaluate the models
 @REM python utils\create_predictions.py --model_a_path %rgb_only_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --test_mode
-python utils\create_predictions.py --model_a_path %rgb_only_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny
+@REM python utils\create_predictions.py --model_a_path %rgb_only_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny
 
 @REM Create gen_results.txt and store the last command
 echo utils\create_predictions.py --model_a_path %rgb_only_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny >> %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\gen_results.txt
 
+
+
+
 @REM ####################################### DEPTH ONLY #######################################
 
-@REM set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
-@REM @REM move "%new_dataset_path%\Depth" "%new_dataset_path%\Depth_original"
-@REM @REM move "%new_dataset_path%\Grayscale" "%new_dataset_path%\Depth"
 @REM move "%new_dataset_path%\Depth" "%new_dataset_path%\RGB_copy"
 @REM move "%new_dataset_path%\Depth_original" "%new_dataset_path%\Depth"
 @REM move "%new_dataset_path%\RGB" "%new_dataset_path%\RGB_original"
@@ -117,7 +122,7 @@ echo utils\create_predictions.py --model_a_path %rgb_only_model_weights% --model
 
 
 @REM @REM Train the model
-@REM python utils\train_clean.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --gpus 1 --checkpoint_dir %checkpoint_dir% --dataset_type %dataset_type% --x_channels=1 --x_e_channels=1
+@REM python utils\train_clean.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --gpus 1 --checkpoint_dir %checkpoint_dir% --dataset_type %dataset_type% --x_channels=1 --x_e_channels=1 --num_hyperparameter_epochs %hyperparam_epochs%
 
 
 @REM @REM Create prediction mious for the dataset with RGB-Black
@@ -138,3 +143,6 @@ echo utils\create_predictions.py --model_a_path %rgb_only_model_weights% --model
 @REM set depth_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
 
 @REM python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --model_weights %depth_model_weights%
+
+
+@REM shutdown /h
