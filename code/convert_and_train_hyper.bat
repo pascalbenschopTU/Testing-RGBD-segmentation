@@ -7,12 +7,13 @@ set hyperparam_epochs=%4
 set use_edge_enhancement=false
 
 set checkpoint_dir=checkpoints
+@REM set checkpoint_dir=checkpoints_CMX
 
-IF %dataset_type% == "" (
+IF "%dataset_type%" == "" (
     set dataset_type=groceries
 )
 
-IF %hyperparam_epochs% == "" (
+IF "%hyperparam_epochs%" == "" (
     set hyperparam_epochs=5
 )
 
@@ -114,6 +115,7 @@ echo utils\create_predictions.py --model_a_path %rgb_only_model_weights% --model
 
 @REM ####################################### DEPTH ONLY #######################################
 
+@REM set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
 @REM move "%new_dataset_path%\Depth" "%new_dataset_path%\RGB_copy"
 @REM move "%new_dataset_path%\Depth_original" "%new_dataset_path%\Depth"
 @REM move "%new_dataset_path%\RGB" "%new_dataset_path%\RGB_original"
