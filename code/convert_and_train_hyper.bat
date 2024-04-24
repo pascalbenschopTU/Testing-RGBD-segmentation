@@ -6,9 +6,9 @@ set num_epochs=%4
 set hyperparam_epochs=%5
 
 set use_edge_enhancement=false
-
 set checkpoint_dir=checkpoints
 @REM set checkpoint_dir=checkpoints_CMX
+set bin_size=25
 
 IF "%num_epochs%" == "" (
     set num_epochs=60
@@ -81,7 +81,7 @@ echo Last filename: %last_filename%
 
 set rgb_depth_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
 
-python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --model_weights %rgb_depth_model_weights% --bin_size 25
+python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --model_weights %rgb_depth_model_weights% --bin_size %bin_size%
 
 set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
 move "%new_dataset_path%\Depth" "%new_dataset_path%\Depth_original"
@@ -89,7 +89,6 @@ xcopy "%new_dataset_path%\RGB" "%new_dataset_path%\Depth" /E /I /Y
 
 
 @REM Train the model
-@REM python utils\train_clean.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --gpus 1 --checkpoint_dir %checkpoint_dir% --dataset_type %dataset_type% --x_channels=3 --x_e_channels=3 --num_epochs %num_epochs% --num_hyperparameter_epochs %hyperparam_epochs%
 python utils\train_clean.py ^
 --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny ^
 --gpus 1 ^
@@ -115,58 +114,51 @@ echo Last filename: %last_filename%
 
 set rgb_only_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
 
-python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --model_weights %rgb_only_model_weights% --bin_size 25
+python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --model_weights %rgb_only_model_weights% --bin_size %bin_size%
 
-
-@REM Evaluate the models
-@REM python utils\create_predictions.py --model_a_path %rgb_only_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --test_mode
-@REM python utils\create_predictions.py --model_a_path %rgb_only_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny
 
 @REM Create gen_results.txt and store the last command
 echo utils\create_predictions.py --model_a_path %rgb_only_model_weights% --model_b_path %rgb_depth_model_weights% --dir_dataset datasets\SynthDet_%dataset_name% --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny >> %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\gen_results.txt
 
 
-
-
 @REM ####################################### DEPTH ONLY #######################################
 
-@REM set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
-@REM move "%new_dataset_path%\Depth" "%new_dataset_path%\RGB_copy"
-@REM move "%new_dataset_path%\Depth_original" "%new_dataset_path%\Depth"
-@REM move "%new_dataset_path%\RGB" "%new_dataset_path%\RGB_original"
-@REM @REM Copy the directory and its files
-@REM xcopy "%new_dataset_path%\Depth" "%new_dataset_path%\RGB" /E /I /Y
+set new_dataset_path=..\DFormer\datasets\SynthDet_%dataset_name%
+move "%new_dataset_path%\Depth" "%new_dataset_path%\RGB_copy"
+move "%new_dataset_path%\Depth_original" "%new_dataset_path%\Depth"
+move "%new_dataset_path%\RGB" "%new_dataset_path%\RGB_original"
+@REM Copy the directory and its files
+xcopy "%new_dataset_path%\Depth" "%new_dataset_path%\RGB" /E /I /Y
 
 
-@REM @REM Train the model
-@REM @REM python utils\train_clean.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --gpus 1 --checkpoint_dir %checkpoint_dir% --dataset_type %dataset_type% --x_channels=1 --x_e_channels=1 --num_epochs %num_epochs% --num_hyperparameter_epochs %hyperparam_epochs%
-@REM python utils\train_clean.py ^
-@REM --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny ^
-@REM --gpus 1 ^
-@REM --checkpoint_dir %checkpoint_dir% ^
-@REM --dataset_type %dataset_type% ^
-@REM --x_channels=1 ^
-@REM --x_e_channels=1 ^
-@REM --num_epochs %num_epochs% ^
-@REM --num_hyperparameter_epochs %hyperparam_epochs%
+@REM Train the model
+python utils\train_clean.py ^
+--config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny ^
+--gpus 1 ^
+--checkpoint_dir %checkpoint_dir% ^
+--dataset_type %dataset_type% ^
+--x_channels=1 ^
+--x_e_channels=1 ^
+--num_epochs %num_epochs% ^
+--num_hyperparameter_epochs %hyperparam_epochs%
 
 
-@REM REM Get the last directory starting with "run" from the given path
-@REM for /f "delims=" %%d in ('dir /b /ad /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\run*') do (
-@REM     set "last_directory=%%d"
-@REM )
+REM Get the last directory starting with "run" from the given path
+for /f "delims=" %%d in ('dir /b /ad /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\run*') do (
+    set "last_directory=%%d"
+)
 
-@REM REM Get the last filename starting with "epoch" in the last directory
-@REM for /f "delims=" %%f in ('dir /b /a-d /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\epoch*') do (
-@REM     set "last_filename=%%f"
-@REM )
+REM Get the last filename starting with "epoch" in the last directory
+for /f "delims=" %%f in ('dir /b /a-d /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\epoch*') do (
+    set "last_filename=%%f"
+)
 
-@REM echo Last directory: %last_directory%
-@REM echo Last filename: %last_filename%
+echo Last directory: %last_directory%
+echo Last filename: %last_filename%
 
-@REM set depth_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
+set depth_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
 
-@REM python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --model_weights %depth_model_weights% --bin_size 25
+python utils\evaluate_models.py --config=local_configs.SynthDet.SynthDet_%dataset_name%_DFormer_Tiny --model_weights %depth_model_weights% --bin_size %bin_size%
 
 
 @REM shutdown /h
