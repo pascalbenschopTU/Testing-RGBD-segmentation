@@ -1,0 +1,8 @@
+models/
+models2/
+checkpoints/
+datasets/
+mmseg/
+
+__init__.py
+__pycache__/
