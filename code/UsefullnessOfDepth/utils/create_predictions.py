@@ -16,9 +16,13 @@ import warnings
 warnings.filterwarnings("ignore", message="On January 1, 2023, MMCV will release v2.0.0*")
 
 import sys
-sys.path.append('../DFormer')
 from utils.dataloader.dataloader import get_train_loader,get_val_loader
-from models.builder import EncoderDecoder as segmodel
+# Model
+from model_DFormer.builder import EncoderDecoder as segmodel
+from models_CMX.builder import EncoderDecoder as cmxmodel
+from model_pytorch_deeplab_xception.deeplab import DeepLab
+from models_segformer import SegFormer
+
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.dformer_gradcam import DFormerAnalyzer
 

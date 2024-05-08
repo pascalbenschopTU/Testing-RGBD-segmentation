@@ -11,9 +11,11 @@ import torch
 import torch.nn as nn
 from utils.dataloader.dataloader import get_train_loader,get_val_loader, ValPre
 # Model
-from models.builder import EncoderDecoder as segmodel
+from model_DFormer.builder import EncoderDecoder as segmodel
 from models_CMX.builder import EncoderDecoder as cmxmodel
 from model_pytorch_deeplab_xception.deeplab import DeepLab
+from models_segformer import SegFormer
+
 # Dataset
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.init_func import init_weight, group_weight
@@ -58,13 +60,13 @@ def evaluate(model, dataloader, config, device, criterion=nn.CrossEntropyLoss(re
             labels = labels.unsqueeze(0)
         # print(preds.shape,labels.shape)
         metrics.update(predictions.softmax(dim=1), labels)
-        loss = criterion(predictions, labels.long())[labels.long() != config.background].mean()
+        loss = criterion(predictions, labels.long())
         val_loss += loss.item()
         val_steps += 1
 
     return metrics, val_loss / val_steps
 
-def get_dataset_and_generator(config):
+def get_dataset(config):
     data_setting = {'rgb_root': config.rgb_root_folder,
                     'rgb_format': config.rgb_format,
                     'gt_root': config.gt_root_folder,
@@ -137,7 +139,7 @@ def train_dformer(config, original_config, train_dataset, num_epochs=5):
     print('train size: ',len(train_loader), 'val size: ',len(val_loader), "batch size: ", config.batch_size)
 
     # Dont ignore the background class
-    criterion = nn.CrossEntropyLoss(reduction='none')
+    criterion = nn.CrossEntropyLoss(reduction='mean')
     BatchNorm2d = nn.BatchNorm2d
     
     if "DFormer" in config.backbone:
@@ -146,6 +148,8 @@ def train_dformer(config, original_config, train_dataset, num_epochs=5):
         model = cmxmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
     if config.backbone == "xception":
         model = DeepLab(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
+    if config.backbone == "segformer":
+        model = SegFormer(cfg=config, criterion=criterion)
     
     base_lr = config.lr
     
@@ -190,7 +194,9 @@ def train_dformer(config, original_config, train_dataset, num_epochs=5):
             gts = gts.cuda(non_blocking=True)
             modal_xs = modal_xs.cuda(non_blocking=True)
 
-            loss = model(imgs, modal_xs, gts)
+            # loss = model(imgs, modal_xs, gts)
+            output = model(imgs, modal_xs)
+            loss = criterion(output, gts.long())
 
             optimizer.zero_grad()
             loss.backward()
@@ -227,10 +233,10 @@ def shorten_trial_dirname_creator(trial, experiment_name="empty"):
 
 def main(original_config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, gpus_per_trial=1, experiment_name="empty"):
     param_space = {
-        "lr": tune.loguniform(1e-4, 1e-1),
+        "lr": tune.loguniform(1e-5, 1e-1),
         "batch_size": tune.choice([4, 8, 16]),
-        "lr_power": tune.uniform(0.9, 1.0),
-        "momentum": tune.uniform(0.9, 0.99),
+        "lr_power": tune.uniform(0.85, 1.0),
+        "momentum": tune.uniform(0.85, 0.99),
         "weight_decay": tune.loguniform(1e-4, 1e-1),
         "optimizer": tune.choice(["AdamW", "SGDM"]),
     }
@@ -256,7 +262,7 @@ def main(original_config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, g
         reduction_factor=2,
     )
 
-    train_dataset = get_dataset_and_generator(original_config)
+    train_dataset = get_dataset(original_config)
     import torch
     import torch._dynamo
     torch.set_float32_matmul_precision("high")
@@ -279,11 +285,11 @@ def main(original_config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, g
             num_samples=num_samples,
         ),
         run_config=train.RunConfig(
-            callbacks=[WandbLoggerCallback(
-                project="DFormer_hyperparameter_tuning",
-                group=experiment_name,
-                api_key=os.environ.get("WANDB_API_KEY"),
-            )],
+            # callbacks=[WandbLoggerCallback(
+            #     project="DFormer_hyperparameter_tuning",
+            #     group=experiment_name,
+            #     api_key=os.environ.get("WANDB_API_KEY"),
+            # )],
             stop={"training_iteration": max_num_epochs},
         ),
         param_space=param_space,
@@ -319,7 +325,7 @@ def tune_hyperparameters(original_config, num_samples=20, max_num_epochs=5, cpus
     original_config.train_source = os.path.abspath(original_config.train_source)
     original_config.eval_source = os.path.abspath(original_config.eval_source)
 
-    experiment_name = original_config.dataset_name
+    experiment_name = f"{original_config.dataset_name}_{original_config.backbone}"
     
     final_config, best_config_dict = main(original_config, num_samples, max_num_epochs, cpus_per_trial, gpus_per_trial, experiment_name)
     return final_config, best_config_dict

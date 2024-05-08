@@ -334,6 +334,17 @@ class AdaptiveDatasetCreator:
                 test_file.write(f"RGB/test_{batch_idx}.png labels/test_{batch_idx}.png\n")
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 'True' 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'False' 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def main():
     parser = argparse.ArgumentParser(description='Convert COCO dataset to DFormer dataset')
     parser.add_argument('dataset_root', help='Path to COCO dataset')
@@ -341,7 +352,7 @@ def main():
     parser.add_argument('dataset_type', default="groceries", help='Type of dataset to convert')
     parser.add_argument('--dataset_split', nargs=2, type=float, default=(0.5, 0.5), help='Train and test split')
     parser.add_argument('--depth_tests', action='store_true', help='Add extra depth test datasets')
-    parser.add_argument('--test_mode', action='store_true', help='Only create test dataset')
+    parser.add_argument('--test_mode', type=str2bool, default=False, help='Only convert test dataset')
     args = parser.parse_args()
     
     dataset_creator = AdaptiveDatasetCreator(args, image_size=(400, 400))

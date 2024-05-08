@@ -15,9 +15,10 @@ from tensorboardX import SummaryWriter
 import numpy as np
 
 # Model
-from models.builder import EncoderDecoder as segmodel
+from model_DFormer.builder import EncoderDecoder as segmodel
 from models_CMX.builder import EncoderDecoder as cmxmodel
 from model_pytorch_deeplab_xception.deeplab import DeepLab
+from models_segformer import SegFormer
 
 # Utils
 from utils.dataloader.dataloader import get_train_loader,get_val_loader
@@ -107,11 +108,21 @@ def train_dformer(config, args):
 
     tb, tb_summary = setup_dirs(config)
 
-    train_loader, _ = get_train_loader(None, RGBXDataset, config)
+    train_loader_args = {
+        # 'random_noise_rgb': True,
+        # 'random_noise_rgb_prob': 0.1,
+        # 'random_noise_rgb_amount': 1.0,
+        # 'random_black': True,
+        # 'random_black_prob': 0.1,
+        # 'random_mirror': True,
+        # 'random_crop_and_scale': True,
+    }
+
+    train_loader, _ = get_train_loader(None, RGBXDataset, config, **train_loader_args)
     val_loader, _ = get_val_loader(None, RGBXDataset, config, 1)
 
     # Dont ignore the background class
-    criterion = nn.CrossEntropyLoss(reduction='none')
+    criterion = nn.CrossEntropyLoss(reduction='mean') #, ignore_index=config.background)
     BatchNorm2d = nn.BatchNorm2d
     
     if "DFormer" in config.backbone:
@@ -120,6 +131,8 @@ def train_dformer(config, args):
         model = cmxmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
     if config.backbone == "xception":
         model = DeepLab(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
+    if config.backbone == "segformer":
+        model = SegFormer(cfg=config, criterion=criterion)
     
     base_lr = config.lr
     
@@ -141,10 +154,21 @@ def train_dformer(config, args):
     print('device: ',device, 'model name: ',config.backbone, 'batch size: ',config.batch_size)
     model.to(device)
 
+    start_epoch = 1
+
+    if config.pretrained_model is not None:
+        print('loading pretrained model from %s' % config.pretrained_model)
+        checkpoint = torch.load(config.pretrained_model, map_location=device)
+        model.load_state_dict(checkpoint['model'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        start_epoch = checkpoint['epoch'] + 1
+        current_idx = checkpoint['iteration']
+        print('starting from epoch: ', start_epoch, 'iteration: ', current_idx)
+
     optimizer.zero_grad()
     best_miou=0.0
 
-    for epoch in range(1, config.nepochs+1):
+    for epoch in range(start_epoch, config.nepochs+1):
         model.train()
         bar_format = '{desc}[{elapsed}<{remaining},{rate_fmt}]'
         pbar = tqdm(range(config.niters_per_epoch), file=sys.stdout,
@@ -163,7 +187,9 @@ def train_dformer(config, args):
             gts = gts.cuda(non_blocking=True)
             modal_xs = modal_xs.cuda(non_blocking=True)
     
-            loss = model(imgs, modal_xs, gts)
+            # loss = model(imgs, modal_xs, gts)
+            output = model(imgs, modal_xs)
+            loss = criterion(output, gts.long())
             
             optimizer.zero_grad()
             loss.backward()
@@ -239,9 +265,10 @@ def save_checkpoint(model, optimizer, epoch, iteration, path):
 
 def prepare_SynthDet_config(args):
     config_path = args.config
-    dataset_name = config_path.split('SynthDet.')[-1].split('_DFormer')[0]
+    model_name = args.model.split('-')[0]
+    dataset_name = config_path.split('SynthDet.')[-1].split(f"_{model_name}")[0]
     if "Dformer" in dataset_name:
-        dataset_name = dataset_name.split('_Dformer')[0]
+        dataset_name = dataset_name.split(f"_{model_name}")[0]
     
     update_config(
         args.config, 
@@ -350,18 +377,6 @@ if __name__ == "__main__":
         default=1,
         help="The number of channels in the x_e modalities",
     )
-    parser.add_argument(
-        "--compile",
-        default=True,
-        action=argparse.BooleanOptionalAction,
-        help="Whether to compile the model",
-    )
-    parser.add_argument(
-        "--compile_mode",
-        type=str,
-        default="default",
-        help="The mode to use for compiling the model",
-    )
     args = parser.parse_args()
 
     if "SynthDet" in args.config:
@@ -372,18 +387,20 @@ if __name__ == "__main__":
     config_module = importlib.reload(importlib.import_module(args.config))
     config = config_module.config
 
-    if args.model == "DFormer_Tiny":
+    if args.model == "DFormer-Tiny":
         config.decoder = "ham"
         config.backbone = "DFormer-Tiny"
-    if args.model == "DFormer_Large":
+    if args.model == "DFormer-Large":
         config.decoder = "ham"
         config.backbone = "DFormer-Large"
         config.drop_path_rate = 0.2
-    if args.model == "CMX_B2":
+    if args.model == "CMX-B2":
         config.decoder = "MLPDecoder"
         config.backbone = "mit_b2"
     if args.model == "DeepLab":
         config.backbone = "xception"
+    if args.model == "segformer":
+        config.backbone = "segformer"
 
     update_config(
         args.config, 
@@ -420,6 +437,7 @@ if __name__ == "__main__":
 
             config_module = importlib.reload(importlib.import_module(args.config))
             final_config = config_module.config
+            print(f"Using hyperparameters from file: {hyperparameters}")
         except Exception as e:
             print(f"Error while processing hyperparameters: {e}")
             print("Getting new hyperparameters")

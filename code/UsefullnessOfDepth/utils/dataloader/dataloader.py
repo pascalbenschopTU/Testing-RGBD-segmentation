@@ -29,34 +29,97 @@ def random_scale(rgb, gt, modal_x, scales):
     return rgb, gt, modal_x, scale
 
 class TrainPre(object):
-    def __init__(self, norm_mean, norm_std,sign=False,config=None):
+    def __init__(self, norm_mean, norm_std,sign=False,config=None, **kwargs):
         self.config=config
         self.norm_mean = norm_mean
         self.norm_std = norm_std
         self.sign =sign
+        self.kwargs = kwargs
+
+    # def __call__(self, rgb, gt, modal_x):
+    #     rgb, gt, modal_x = random_mirror(rgb, gt, modal_x)
+    #     if self.config.train_scale_array is not None:
+    #         rgb, gt, modal_x, scale = random_scale(rgb, gt, modal_x, self.config.train_scale_array)
+
+    #     rgb = normalize(rgb, self.norm_mean, self.norm_std)
+    #     if self.sign:
+    #         modal_x = normalize(modal_x, [0.48,0.48,0.48], [0.28,0.28,0.28])#[0.5,0.5,0.5]
+    #     else:
+    #         modal_x = normalize(modal_x, self.norm_mean, self.norm_std)
+
+    #     crop_size = (self.config.image_height, self.config.image_width)
+    #     crop_pos = generate_random_crop_pos(rgb.shape[:2], crop_size)
+
+    #     p_rgb, _ = random_crop_pad_to_shape(rgb, crop_pos, crop_size, 0)
+    #     p_gt, _ = random_crop_pad_to_shape(gt, crop_pos, crop_size, 0)
+    #     p_modal_x, _ = random_crop_pad_to_shape(modal_x, crop_pos, crop_size, 0)
+
+    #     p_rgb = p_rgb.transpose(2, 0, 1)
+    #     p_modal_x = p_modal_x.transpose(2, 0, 1)
+        
+    #     return p_rgb, p_gt, p_modal_x
+    
+    def normalize_image_with_varying_shape(self, image):
+        if image.ndim == 2:
+            image = normalize(image, np.mean(self.norm_mean), np.mean(self.norm_std))
+            image = np.expand_dims(image, axis=2)
+        else:
+            image = normalize(image, self.norm_mean, self.norm_std)
+
+        return image
+    
 
     def __call__(self, rgb, gt, modal_x):
-        rgb, gt, modal_x = random_mirror(rgb, gt, modal_x)
-        if self.config.train_scale_array is not None:
+        rgb = resize_image(rgb, (self.config.image_width, self.config.image_height))
+        gt = resize_image(gt, (self.config.image_width, self.config.image_height))
+        modal_x = resize_image(modal_x, (self.config.image_width, self.config.image_height))
+        
+        randomly_mirror_image = self.kwargs.get('random_mirror', False)
+        if randomly_mirror_image:
+            rgb, gt, modal_x = random_mirror(rgb, gt, modal_x)
+
+        random_crop_and_scale = self.kwargs.get('random_crop_and_scale', False)
+        if random_crop_and_scale:
             rgb, gt, modal_x, scale = random_scale(rgb, gt, modal_x, self.config.train_scale_array)
 
-        rgb = normalize(rgb, self.norm_mean, self.norm_std)
-        if self.sign:
-            modal_x = normalize(modal_x, [0.48,0.48,0.48], [0.28,0.28,0.28])#[0.5,0.5,0.5]
-        else:
-            modal_x = normalize(modal_x, self.norm_mean, self.norm_std)
+        random_black = self.kwargs.get('random_black', False)
+        random_black_prob = self.kwargs.get('random_black_prob', 0.5)
+        if random_black:
+            if np.random.uniform() < random_black_prob:
+                rgb = np.zeros_like(rgb)
 
-        crop_size = (self.config.image_height, self.config.image_width)
-        crop_pos = generate_random_crop_pos(rgb.shape[:2], crop_size)
+        random_noise_rgb = self.kwargs.get('random_noise_rgb', False)
+        random_noise_rgb_prob = self.kwargs.get('random_noise_rgb_prob', 0.5)
+        random_noise_rgb_max = self.kwargs.get('random_noise_rgb_amount', 0.1)
+        if random_noise_rgb and np.random.uniform() < random_noise_rgb_prob:
+            noise_std = np.random.uniform(0, random_noise_rgb_max) * (np.max(rgb) - np.min(rgb))
+            rgb = rgb + np.random.normal(0, noise_std, rgb.shape)
 
-        p_rgb, _ = random_crop_pad_to_shape(rgb, crop_pos, crop_size, 0)
-        p_gt, _ = random_crop_pad_to_shape(gt, crop_pos, crop_size, 0)
-        p_modal_x, _ = random_crop_pad_to_shape(modal_x, crop_pos, crop_size, 0)
+        random_noise_modal_x = self.kwargs.get('random_noise_modal_x', False)
+        random_noise_modal_x_prob = self.kwargs.get('random_noise_modal_x_prob', 0.5)
+        random_noise_modal_x_max = self.kwargs.get('random_noise_modal_x_amount', 0.1)
+        if random_noise_modal_x and np.random.uniform() < random_noise_modal_x_prob:
+            noise_std = np.random.uniform(0, random_noise_modal_x_max) * (np.max(modal_x) - np.min(modal_x))
+            modal_x = modal_x + np.random.normal(0, noise_std, modal_x.shape)
 
-        p_rgb = p_rgb.transpose(2, 0, 1)
-        p_modal_x = p_modal_x.transpose(2, 0, 1)
+        rgb = self.normalize_image_with_varying_shape(rgb)
+        modal_x = self.normalize_image_with_varying_shape(modal_x)
+
+        if random_crop_and_scale:
+            crop_size = (self.config.image_height, self.config.image_width)
+            crop_pos = generate_random_crop_pos(rgb.shape[:2], crop_size)
+
+            rgb, _ = random_crop_pad_to_shape(rgb, crop_pos, crop_size, 0)
+            gt, _ = random_crop_pad_to_shape(gt, crop_pos, crop_size, 0)
+            modal_x, _ = random_crop_pad_to_shape(modal_x, crop_pos, crop_size, 0)
+
+        rgb = rgb.transpose(2, 0, 1)
+        if modal_x.ndim == 2:
+            modal_x = np.expand_dims(modal_x, axis=2)   
+        modal_x = modal_x.transpose(2, 0, 1)
+
+        return rgb, gt, modal_x
         
-        return p_rgb, p_gt, p_modal_x
 
 class ValPre(object):
     def __init__(self, norm_mean, norm_std,sign=False,config=None):
@@ -84,7 +147,7 @@ class ValPre(object):
         return rgb.transpose(2, 0, 1), gt, modal_x.transpose(2, 0, 1)
     
 
-def get_train_loader(engine, dataset,config):
+def get_train_loader(engine, dataset, config, **kwargs):
     data_setting = {'rgb_root': config.rgb_root_folder,
                     'rgb_format': config.rgb_format,
                     'gt_root': config.gt_root_folder,
@@ -99,7 +162,9 @@ def get_train_loader(engine, dataset,config):
                     'class_names': config.class_names}
     
     # train_preprocess = TrainPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config)
-    train_preprocess = ValPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config)
+    # train_preprocess = ValPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config)
+    print("Using TrainPre with kwargs: ", kwargs)
+    train_preprocess = TrainPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config, **kwargs)
 
     num_imgs = (config.num_train_imgs // config.batch_size + 1) * config.batch_size
     train_dataset = dataset(data_setting, "train", train_preprocess, num_imgs)
@@ -126,7 +191,7 @@ def get_train_loader(engine, dataset,config):
     return train_loader, train_sampler
 
 
-def get_val_loader(engine, dataset,config,gpus):
+def get_val_loader(engine, dataset,config,gpus=1):
     data_setting = {'rgb_root': config.rgb_root_folder,
                     'rgb_format': config.rgb_format,
                     'gt_root': config.gt_root_folder,

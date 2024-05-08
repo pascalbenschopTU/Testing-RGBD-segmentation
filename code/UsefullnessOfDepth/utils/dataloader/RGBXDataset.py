@@ -46,8 +46,8 @@ class RGBXDataset(data.Dataset):
         gt_path = os.path.join(self._gt_path, item_name.replace('.jpg','').replace('.png','')  + self._gt_format)
 
         gt = self._open_image(gt_path, cv2.IMREAD_UNCHANGED, dtype=np.uint8)
-        rgb = self._open_image(rgb_path, cv2.IMREAD_UNCHANGED, dtype=np.uint8)
-        x = self._open_image(x_path, cv2.IMREAD_UNCHANGED, dtype=np.uint8)
+        rgb = self._open_image(rgb_path, cv2.IMREAD_UNCHANGED, dtype=np.float32)
+        x = self._open_image(x_path, cv2.IMREAD_UNCHANGED, dtype=np.float32)
 
         if self.preprocess is not None:
             rgb, gt, x = self.preprocess(rgb, gt, x)
@@ -114,6 +114,8 @@ class RGBXDataset(data.Dataset):
     def _open_image(filepath, mode=cv2.IMREAD_COLOR, dtype=None):
         try:
             img = np.array(cv2.imread(filepath, mode), dtype=dtype)
+            if len(img.shape) > 2 and (img.shape[2] == 3 or img.shape[2] == 4):
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         except Exception as e:
             print("Error: ", e, " filepath: ", filepath)
         return img

@@ -9,9 +9,10 @@ import torch
 import torch.nn as nn
 from torchmetrics import JaccardIndex
 # Model
-from models.builder import EncoderDecoder as segmodel
+from model_DFormer.builder import EncoderDecoder as segmodel
 from models_CMX.builder import EncoderDecoder as cmxmodel
 from model_pytorch_deeplab_xception.deeplab import DeepLab
+from models_segformer import SegFormer
 
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.dataloader.dataloader import get_val_loader, get_train_loader
@@ -21,6 +22,7 @@ from metrics_new import Metrics
 from tqdm import tqdm
 import numpy as np
 import seaborn as sns
+from datetime import datetime
 
 class Evaluator(object):
     def __init__(self, num_class, ignore_index=255):
@@ -108,8 +110,7 @@ class Evaluator(object):
         self.confusion_matrix = np.zeros((self.num_class,) * 2)
 
 def set_config_if_dataset_specified(config, dataset_location):
-    config.root_dir = dataset_location
-    config.dataset_path = os.path.join(config.root_dir, config.dataset_name)
+    config.dataset_path = dataset_location
     config.rgb_root_folder = os.path.join(config.dataset_path, 'RGB')
     config.gt_root_folder = os.path.join(config.dataset_path, 'labels')
     config.x_root_folder = os.path.join(config.dataset_path, 'Depth')
@@ -141,8 +142,7 @@ def set_model_weights_if_not_specified(config, args):
 
 
 logger = get_logger()
-def get_scores_for_model(parser, results_file="results.txt"):
-    args = parser.parse_args()
+def get_scores_for_model(args, results_file="results.txt"):
     module_name = args.config
     if ".py" in module_name:
         module_name = module_name.replace(".py", "")
@@ -153,13 +153,25 @@ def get_scores_for_model(parser, results_file="results.txt"):
     config_module = importlib.import_module(module_name)
     config = config_module.config
 
+    if args.model is not None:
+        if args.model == "DFormer-Tiny":
+            config.backbone = "DFormer-Tiny"
+        if args.model == "DFormer-Large":
+            config.backbone = "DFormer-Large"
+        if args.model == "CMX_B2":
+            config.backbone = "mit_b2"
+        if args.model == "Xception":
+            config.backbone = "xception"
+        if args.model == "segformer":
+            config.backbone = "segformer"
+
     if args.model_weights is None or not ".pth" in args.model_weights or not config.backbone in args.model_weights:
         args = set_model_weights_if_not_specified(config, args)
 
     model_weights_dir = os.path.dirname(args.model_weights)
     model_results_file = os.path.join(model_weights_dir, results_file)
 
-    if args.dataset:
+    if hasattr(args, "dataset") and args.dataset is not None:
         config = set_config_if_dataset_specified(config, args.dataset)
 
     val_loader, val_sampler = get_val_loader(None, RGBXDataset,config,1)
@@ -173,9 +185,12 @@ def get_scores_for_model(parser, results_file="results.txt"):
         model = cmxmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
     if config.backbone == "xception":
         model = DeepLab(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
+    if config.backbone == "segformer":
+        model = SegFormer(cfg=config, criterion=criterion)
 
     weight = torch.load(args.model_weights)['model']
-    print('load model')
+    # print('load model: ', args.model_weights)
+    logger.info(f'load model {config.backbone} weights : {args.model_weights}')
     model.load_state_dict(weight, strict=False)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -185,14 +200,18 @@ def get_scores_for_model(parser, results_file="results.txt"):
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     
     logger.info('begin testing:')
+
+    # Get class names from config
+    class_names = config.class_names
     
     with torch.no_grad():
         model.eval()
         device = torch.device('cuda')
         metric, mious, iou_stds = evaluate(model, val_loader,config, device, bin_size=args.bin_size)
-        metric.confusion_matrix = metric.confusion_matrix[1:, 1:]
+        if hasattr(args, 'ignore_background') and args.ignore_background:
+            metric.confusion_matrix = metric.confusion_matrix[1:, 1:]
+            class_names = class_names[1:]
         miou = metric.Mean_Intersection_over_Union()
-        # macc = metric.Pixel_Accuracy()
         acc, macc = metric.compute_pixel_acc()
         mf1 = metric.F1_Score()
         pixel_acc_class = metric.Pixel_Accuracy_Class()
@@ -202,22 +221,29 @@ def get_scores_for_model(parser, results_file="results.txt"):
         confusion_matrix = metric.confusion_matrix
         import matplotlib.pyplot as plt
 
-        # Get class names from config
-        class_names = config.class_names
-
         # Normalize confusion matrix
         # confusion_matrix = confusion_matrix.astype('float') / confusion_matrix.sum(axis=1)[:, np.newaxis]
         epsilon = 1e-7  # Small constant
         confusion_matrix = confusion_matrix.astype('float') / (confusion_matrix.sum(axis=1)[:, np.newaxis] + epsilon)
 
+        default_figsize = (10, 10)
+        if len(class_names) > 15:
+            default_figsize = (20, 20)
+        if len(class_names) < 5:
+            default_figsize = (5, 5)
+
         # Plot confusion matrix
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(confusion_matrix[1:, 1:], annot=True, fmt=".3f", cmap="Blues", xticklabels=class_names[1:], yticklabels=class_names[1:])
+        plt.figure(figsize=default_figsize)
+        sns.heatmap(confusion_matrix, annot=True, fmt=".3f", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
         plt.xlabel("Predicted")
         plt.ylabel("True")
-        plt.title("Confusion Matrix")
+        plt.title("Confusion Matrix, mIoU: {:.2f}".format(miou))
         plt.tight_layout()
-        plt.savefig(os.path.join(model_weights_dir, 'confusion_matrix.png'))
+        result_file_name = os.path.join(model_weights_dir, 'confusion_matrix.png')
+        if os.path.exists(result_file_name):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            result_file_name = os.path.join(model_weights_dir, f'confusion_matrix_{timestamp}.png')
+        plt.savefig(result_file_name)
 
 
         with open(model_results_file, 'a') as f:
@@ -296,5 +322,8 @@ if __name__ == '__main__':
     argparser.add_argument('--model', help='Model name', default='DFormer-Tiny')
     argparser.add_argument('--bin_size', help='Bin size for testing', default=1, type=int)
     argparser.add_argument('--dataset', help='Dataset dir')
+    argparser.add_argument('--ignore_background', action='store_true', help='Ignore background class')
 
-    get_scores_for_model(argparser)
+    args = argparser.parse_args()
+
+    get_scores_for_model(args)
