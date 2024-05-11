@@ -114,8 +114,8 @@ def train_dformer(config, args):
         # 'random_noise_rgb_amount': 1.0,
         # 'random_black': True,
         # 'random_black_prob': 0.1,
-        # 'random_mirror': True,
-        # 'random_crop_and_scale': True,
+        'random_mirror': True,
+        'random_crop_and_scale': True,
     }
 
     train_loader, _ = get_train_loader(None, RGBXDataset, config, **train_loader_args)

@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from CocoDepthDataset import CocoDepthDataset
 from PIL import Image
 import multiprocessing
+from tqdm import tqdm
 
 # This class is used to add noise to the depth images
 # Taken from https://github.com/ankurhanda/simkinect/tree/master 
@@ -184,7 +185,7 @@ class AdaptiveDatasetCreator:
             pass
 
     def convert_and_save_RGB(self, rgb_data, file_name):
-        rgb_image = rgb_data[0].numpy()
+        rgb_image = rgb_data.numpy()
         rgb_image = (rgb_image * 255).astype('uint8')
         rgb_image = Image.fromarray(rgb_image.transpose(1, 2, 0))
         if not os.path.exists(os.path.join(self.save_location, f"RGB")):
@@ -192,8 +193,8 @@ class AdaptiveDatasetCreator:
         rgb_image.save(os.path.join(self.save_location, f"RGB/{file_name}.png"))
     
     def convert_and_save_label(self, label, file_name):
-        label = label.squeeze(1)
-        label_image = label[0].numpy()
+        label = label.squeeze(0)
+        label_image = label.numpy()
         label_image = label_image.astype('uint8')
         if self.dataset_gems:
             label_image[label_image != 0] = label_image[label_image != 0] - 63
@@ -205,26 +206,17 @@ class AdaptiveDatasetCreator:
         label_image.save(os.path.join(self.save_location, f"labels/{file_name}.png"))
 
     def convert_and_save_depth(self, depth_data, file_name):
-        depth_data = depth_data.squeeze(1)
-        depth_data = depth_data[0].numpy()
+        depth_data = depth_data.squeeze(0)
+        depth_data = depth_data.numpy()
         depth_data = (depth_data * 255).astype('uint8')
         depth_image = Image.fromarray(depth_data)
         if not os.path.exists(os.path.join(self.save_location, f"Depth")):
             os.makedirs(os.path.join(self.save_location, f"Depth"), exist_ok=True)
         depth_image.save(os.path.join(self.save_location, f"Depth/{file_name}.png"))
 
-    def convert_and_save_depth_compressed(self, depth_data, file_name, compression_factor=0.5):
-        depth_data = depth_data.squeeze(1)
-        depth_data = depth_data[0].numpy()
-        compressed_depth_data = np.power(depth_data / 255.0, compression_factor)
-        compressed_depth_image = (compressed_depth_data * 255).astype('uint8')
-        compressed_depth_image = Image.fromarray(compressed_depth_image)
-        if not os.path.exists(os.path.join(self.save_location, f"Depth_compressed")):
-            os.makedirs(os.path.join(self.save_location, f"Depth_compressed"), exist_ok=True)
-        compressed_depth_image.save(os.path.join(self.save_location, f"Depth_compressed/{file_name}.png"))
 
     def convert_and_save_grayscale(self, rgb_data, file_name):
-        rgb_image = rgb_data[0].numpy()
+        rgb_image = rgb_data.numpy()
         rgb_image = (rgb_image * 255).astype('uint8')
         rgb_image = Image.fromarray(rgb_image.transpose(1, 2, 0))
         rgb_image = rgb_image.convert('L')
@@ -243,16 +235,6 @@ class AdaptiveDatasetCreator:
         depth_image.save(os.path.join(self.save_location, f"Depth_kinect_noise/{file_name}.png"))
 
 
-    def convert_and_save_depth_noise(self, depth_data, file_name, noise_factor=0.1):
-        depth_data = depth_data.squeeze(1)
-        depth_data = depth_data[0].numpy()
-        noisy_depth_data = np.clip(depth_data + np.random.normal(scale=noise_factor, size=depth_data.shape), 0.0, 1.0)
-        noisy_depth_data = (noisy_depth_data * 255).astype('uint8')
-        noisy_depth_image = Image.fromarray(noisy_depth_data)
-        if not os.path.exists(os.path.join(self.save_location, f"Depth_noise_{str(noise_factor)}")):
-            os.makedirs(os.path.join(self.save_location, f"Depth_noise_{str(noise_factor)}"), exist_ok=True)
-        noisy_depth_image.save(os.path.join(self.save_location, f"Depth_noise_{str(noise_factor)}/{file_name}.png"))
-
 
     def convert_and_save_dataset(self):
         # Define data transformations
@@ -262,76 +244,44 @@ class AdaptiveDatasetCreator:
         ])
 
         dataset = CocoDepthDataset(os.path.join(self.dataset_root, 'images'), os.path.join(self.dataset_root, 'semantic.json'), os.path.join(self.dataset_root, 'depth'), transform=transform)
-
-        if self.test_mode:
-            num_workers = 16
-            test_dataset = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=num_workers)
-            for batch_idx, (rgb_data, depth_data, label) in enumerate(test_dataset):
-                self.convert_and_save_RGB(rgb_data, f"test_{batch_idx}")
-                self.convert_and_save_label(label, f"test_{batch_idx}")
-                self.convert_and_save_depth(depth_data, f"test_{batch_idx}")
-                # self.convert_and_save_grayscale(rgb_data, f"test_{batch_idx}")
-                if self.dataset_depth_tests:
-                    self.convert_and_save_depth_compressed(depth_data, f"test_{batch_idx}")
-                    self.convert_and_save_depth_kinect_noise(depth_data, f"test_{batch_idx}")
-                    self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.1)
-                    self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.5)
-                    self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.9)
-
-                # add a line to test.txt with the path to the RGB image and the path to the depth image
-                # Example: RGB/test_0.jpg labels/test_0.png
-                with open(os.path.join(self.save_location, 'test.txt'), 'a') as test_file:
-                    test_file.write(f"RGB/test_{batch_idx}.png labels/test_{batch_idx}.png\n")
-            return
-        # Split dataset into training and validation sets
+        
         train_size = int(len(dataset) * self.dataset_split[0])
         test_size = len(dataset) - train_size
         train_dataset = torch.utils.data.Subset(dataset, list(range(train_size)))
         test_dataset = torch.utils.data.Subset(dataset, list(range(train_size, train_size + test_size)))
 
-        # Define the number of workers for parallel data loading
-        num_workers = 1
-        print(f"Using {num_workers} workers for data loading")
+        if self.test_mode:
+            self.process_dataset(test_dataset, dataset_split="test")
+            return
+        self.process_dataset(train_dataset, dataset_split="train")
+        self.process_dataset(test_dataset, dataset_split="test")
 
-        # Define data loaders
-        train_loader = DataLoader(train_dataset, batch_size=1, shuffle=False, num_workers=num_workers)
-        test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=num_workers)
 
-        # Iterate through the dataset and save to another location
-        for batch_idx, (rgb_data, depth_data, label) in enumerate(train_loader):
-            self.convert_and_save_RGB(rgb_data, f"train_{batch_idx}")
-            self.convert_and_save_label(label, f"train_{batch_idx}")
-            self.convert_and_save_depth(depth_data, f"train_{batch_idx}")
-            # self.convert_and_save_grayscale(rgb_data, f"train_{batch_idx}")
-            if self.dataset_depth_tests:
-                self.convert_and_save_depth_compressed(depth_data, f"train_{batch_idx}")
-                self.convert_and_save_depth_kinect_noise(depth_data, f"train_{batch_idx}")
-                self.convert_and_save_depth_noise(depth_data, f"train_{batch_idx}", noise_factor=0.1)
-                self.convert_and_save_depth_noise(depth_data, f"train_{batch_idx}", noise_factor=0.5)
-                self.convert_and_save_depth_noise(depth_data, f"train_{batch_idx}", noise_factor=0.9)
-            
+    def process_dataset(self, dataset, dataset_split="train"):
+        progress_bar = tqdm(total=len(dataset), desc='Processing')
 
-            # add a line to train.txt with the path to the RGB image and the path to the depth image
-            # Example: RGB/train_0.jpg labels/train_0.png
-            with open(os.path.join(self.save_location, 'train.txt'), 'a') as train_file:
-                train_file.write(f"RGB/train_{batch_idx}.png labels/train_{batch_idx}.png\n")
+        pool = multiprocessing.Pool()
 
-        for batch_idx, (rgb_data, depth_data, label) in enumerate(test_loader):
-            self.convert_and_save_RGB(rgb_data, f"test_{batch_idx}")
-            self.convert_and_save_label(label, f"test_{batch_idx}")
-            self.convert_and_save_depth(depth_data, f"test_{batch_idx}")
-            # self.convert_and_save_grayscale(rgb_data, f"test_{batch_idx}")
-            if self.dataset_depth_tests:
-                self.convert_and_save_depth_compressed(depth_data, f"test_{batch_idx}")
-                self.convert_and_save_depth_kinect_noise(depth_data, f"test_{batch_idx}")
-                self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.1)
-                self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.5)
-                self.convert_and_save_depth_noise(depth_data, f"test_{batch_idx}", noise_factor=0.9)
+        for idx, (rgb_data, depth_data, label) in enumerate(dataset):
+            pool.apply(self.process_sequence, args=(idx, rgb_data, depth_data, label, dataset_split))
+            progress_bar.update(1)
+            # pool.apply_async(self.process_sequence, args=(idx, rgb_data, depth_data, label, dataset_split), callback=lambda _: progress_bar.update(1))
 
-            # add a line to test.txt with the path to the RGB image and the path to the depth image
-            # Example: RGB/test_0.jpg labels/test_0.png
-            with open(os.path.join(self.save_location, 'test.txt'), 'a') as test_file:
-                test_file.write(f"RGB/test_{batch_idx}.png labels/test_{batch_idx}.png\n")
+
+        pool.close()
+        pool.join()
+
+        progress_bar.close()
+
+    def process_sequence(self, idx, rgb_data, depth_data, label, dataset_split):
+        self.convert_and_save_RGB(rgb_data, f"{dataset_split}_{idx}")
+        self.convert_and_save_label(label, f"{dataset_split}_{idx}")
+        self.convert_and_save_depth(depth_data, f"{dataset_split}_{idx}")
+
+        with open(os.path.join(self.save_location, f'{dataset_split}.txt'), 'a') as file:
+            file.write(f"RGB/{dataset_split}_{idx}.png labels/{dataset_split}_{idx}.png\n")
+        
+
 
 
 def str2bool(v):

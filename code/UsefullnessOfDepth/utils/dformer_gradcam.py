@@ -231,6 +231,7 @@ if __name__ == '__main__':
 
     if args.analyze_dataset:
         analyzeDataset(args.model_path, args.dataset_dir, config, target_categories=args.target_categories)
+        exit()
 
      
     val_loader, val_sampler = get_val_loader(None, RGBXDataset,config,1)

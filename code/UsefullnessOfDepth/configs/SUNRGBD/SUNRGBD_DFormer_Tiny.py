@@ -47,18 +47,20 @@ C.norm_mean = np.array([0.485, 0.456, 0.406])
 C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
-C.backbone = 'xception'
-C.pretrained_model = None #'checkpoints/pretrained/DFormer_Tiny.pth.tar'
-C.decoder = 'ham'
+C.backbone = 'mit_b2'
+# code\UsefullnessOfDepth\checkpoints\SUNRGBD_DFormer-Large\run_20240427-205208\epoch_30_miou_25.014.pth
+# code\UsefullnessOfDepth\checkpoints\SUNRGBD_DFormer-Tiny\run_20240506-171857\epoch_30_miou_20.097.pth
+C.pretrained_model = None #'checkpoints/SUNRGBD_DFormer-Tiny/run_20240506-171857/epoch_30_miou_20.097.pth' # 'checkpoints/SUNRGBD_DFormer-Large/run_20240427-205208/epoch_30_miou_25.014.pth' # None #'checkpoints/pretrained/DFormer_Tiny.pth.tar'
+C.decoder = 'MLPDecoder'
 C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'
 
 """Train Config"""
-C.lr = 0.002762245586628302
-C.lr_power = 0.969713277525643
-C.momentum = 0.943026538102382
-C.weight_decay = 0.0005876439568987937
-C.batch_size = 8
+C.lr = 0.0004663682417737205
+C.lr_power = 0.8538534048156381
+C.momentum = 0.9753656283194544
+C.weight_decay = 0.0004357202955954632
+C.batch_size = 4
 C.nepochs = 60
 C.niters_per_epoch = C.num_train_imgs // C.batch_size  + 1
 C.num_workers = 1

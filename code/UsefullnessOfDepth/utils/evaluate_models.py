@@ -21,6 +21,7 @@ from utils.engine.logger import get_logger
 from metrics_new import Metrics
 from tqdm import tqdm
 import numpy as np
+import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
 
@@ -60,6 +61,8 @@ class Evaluator(object):
         ious = np.diag(self.confusion_matrix) / (
                     np.sum(self.confusion_matrix, axis=1) + np.sum(self.confusion_matrix, axis=0) - 
                     np.diag(self.confusion_matrix))
+        if np.all(np.isnan(ious)):
+            print("All ious are NaN", ious)
         miou = np.nanmean(ious)
         ious = ious[~np.isnan(ious)]
         iou_std = np.std(ious)
@@ -72,10 +75,10 @@ class Evaluator(object):
         return np.round(acc * 100, 2), np.round(macc * 100, 2)
 
     def Mean_Intersection_over_Union(self):
-        MIoU = np.diag(self.confusion_matrix) / (
+        IoU = np.diag(self.confusion_matrix) / (
                     np.sum(self.confusion_matrix, axis=1) + np.sum(self.confusion_matrix, axis=0) -
                     np.diag(self.confusion_matrix))
-        MIoU = np.nanmean(MIoU)
+        MIoU = np.nanmean(IoU)
         return MIoU * 100
     
     def Mean_Intersection_over_Union_non_zero(self):
@@ -211,21 +214,28 @@ def get_scores_for_model(args, results_file="results.txt"):
         if hasattr(args, 'ignore_background') and args.ignore_background:
             metric.confusion_matrix = metric.confusion_matrix[1:, 1:]
             class_names = class_names[1:]
-        miou = metric.Mean_Intersection_over_Union()
+        # miou = metric.Mean_Intersection_over_Union()
+        ious, iou_std, miou = metric.compute_iou()
         acc, macc = metric.compute_pixel_acc()
         mf1 = metric.F1_Score()
         pixel_acc_class = metric.Pixel_Accuracy_Class()
         fwiou = metric.Frequency_Weighted_Intersection_over_Union()
         print('miou, macc, mf1, pixel_acc_class, fwiou: ',miou, macc, mf1, pixel_acc_class, fwiou)
-
+        
+        
+        # plt.figure(figsize=(20, 20))
+        # sns.heatmap(metric.confusion_matrix, annot=True, fmt=".3f", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
+        # plt.xlabel("Predicted")
+        # plt.ylabel("True")
+        # plt.title("Confusion Matrix, mIoU: {:.2f}".format(miou))
+        # plt.tight_layout()
+        # plt.show()
         confusion_matrix = metric.confusion_matrix
-        import matplotlib.pyplot as plt
-
+        
         # Normalize confusion matrix
-        # confusion_matrix = confusion_matrix.astype('float') / confusion_matrix.sum(axis=1)[:, np.newaxis]
         epsilon = 1e-7  # Small constant
         confusion_matrix = confusion_matrix.astype('float') / (confusion_matrix.sum(axis=1)[:, np.newaxis] + epsilon)
-
+        
         default_figsize = (10, 10)
         if len(class_names) > 15:
             default_figsize = (20, 20)

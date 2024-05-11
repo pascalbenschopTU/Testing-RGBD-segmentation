@@ -19,7 +19,6 @@ class DeepLab(nn.Module):
             output_stride = 8
 
         BatchNorm = SynchronizedBatchNorm2d if sync_bn else norm_layer
-        print("using batch norm: ", BatchNorm)
         self.backbone = build_backbone(backbone, output_stride, BatchNorm)
         self.aspp = build_aspp(backbone, output_stride, BatchNorm)
         self.decoder = build_decoder(num_classes, backbone, BatchNorm)

@@ -47,7 +47,7 @@ C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = 'DFormer-Large'
-C.pretrained_model = None #'checkpoints/pretrained/DFormer_Large.pth.tar'
+C.pretrained_model = None #'checkpoints/SUNRGBD_DFormer-Large/run_20240427-183318/epoch_10_miou_11.162.pth' # None #'checkpoints/pretrained/DFormer_Large.pth.tar'
 C.decoder = 'ham'
 C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'

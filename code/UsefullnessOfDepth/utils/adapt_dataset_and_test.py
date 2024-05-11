@@ -22,75 +22,56 @@ def adapt_dataset(origin_directory_path, destination_directory_path, property_va
     progress_bar = tqdm(total=len(paths), desc=f'Processing files in {origin_directory_path}')
     print("Property value: ", property_value)
 
-    for path, destination_directory_path in zip(paths, destination_paths):
-        # new_saturation = adjust_saturation(path, destination_directory_path, saturation_value)
-        new_saturation = adaptation_method(path, destination_directory_path, property_value)
+    for path, destination_path in zip(paths, destination_paths):
+        # new_saturation = adjust_saturation(path, destination_path, saturation_value)
+        new_saturation = adaptation_method(path, destination_path, property_value)
         progress_bar.update(1)
 
     # Close the progress bar
     progress_bar.close()
 
 
-def adjust_saturation(image_path, destination_directory_path, saturation_value):
+def adjust_saturation(image_path, destination_path, saturation_value):
     image = Image.open(image_path)
     saturated_image = F.adjust_saturation(image, saturation_value)
 
     # Save the image
-    saturated_image.save(destination_directory_path)
+    saturated_image.save(destination_path)
 
     return saturation_value
 
-def adjust_hue(image_path, destination_directory_path, hue):
+def adjust_hue(image_path, destination_path, hue):
     image = Image.open(image_path)
     color_image = F.adjust_hue(image, hue)
 
     # Save the image
-    color_image.save(destination_directory_path)
+    color_image.save(destination_path)
 
     return hue
 
-def adjust_shadow(image_path, destination_directory_path, shadow_percentage):
-    # Create random blobs of shadows (black patches) on the image
-    # Where the shadow_percentage is the percentage of the image that is shadowed
-    assert 0 < shadow_percentage < 1
-    image = Image.open(image_path)
-    image = np.array(image)
-
-    blob_size = 15 + int(10 * shadow_percentage)
-
-    # Create a binary mask with Gaussian blobs
-    mask = np.random.rand(*image.shape[:2]) > shadow_percentage
-    mask = gaussian_filter(mask.astype(float), sigma=blob_size)
-
-    # Normalize the mask to ensure values are between 0 and 1
-    mask = (mask - mask.min()) / (mask.max() - mask.min())
-
-    # Apply a nonlinear filter so that the mask < 0.5 is 0 and mask > 0.5 is mask
-    mask = np.where(mask < shadow_percentage, 0, mask)
-
-    # Create a 3D mask by stacking the 2D mask along the color dimension
-    mask = np.stack([mask]*3, axis=-1)
-
-    # Apply the mask to the image, reducing the pixel values where the mask is 1
-    shadowed_image = image * mask
-
-    # Convert the image back to its original data type
-    shadowed_image = shadowed_image.astype(image.dtype)
-
-    # Save the image
-    shadowed_image = Image.fromarray(shadowed_image)
-    shadowed_image.save(destination_directory_path)
-
-    return shadow_percentage
-
-def adjust_brightness(image_path, destination_directory_path, brightness_factor):
+def adjust_brightness(image_path, destination_path, brightness_factor):
     image = Image.open(image_path)
     brightened_image = F.adjust_brightness(image, brightness_factor)
 
     # Save the image
-    brightened_image.save(destination_directory_path)
+    brightened_image.save(destination_path)
 
     return brightness_factor
+
+def adjust_depth_level(image_path, destination_path, depth_level):
+    depth_image = Image.open(image_path)
+    depth_image = np.array(depth_image)
+    min_depth = np.min(depth_image)
+    max_depth = np.max(depth_image)
+    depth_image = np.clip(depth_image + (depth_level * (max_depth - min_depth)), min_depth, max_depth).astype(np.uint8)
+
+    depth_image = Image.fromarray(depth_image)
+    depth_image = depth_image.convert("L")
+
+    # Save the image
+    depth_image.save(destination_path)
+
+    return depth_level
 
 
 
@@ -99,10 +80,10 @@ def adapt_property(origin_directory_path, destination_directory_path, property_v
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_saturation, split)
     if property_name == "hue":
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_hue, split)
-    if property_name == "shadow":
-        adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_shadow, split)
     if property_name == "brightness":
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_brightness, split)
+    if property_name == "depth_level":
+        adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_depth_level, split)
 
 
 def test_property_shift(args, property_values):
@@ -197,16 +178,16 @@ if __name__ == "__main__":
                 hue_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
             test_property_shift(args, hue_values)
 
-        if args.property_name == "shadow":
-            shadow_values = np.linspace(0.1, 0.5, 10)
-            if args.min_property_value != -1.0 and args.max_property_value != -1.0:
-                shadow_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
-            test_property_shift(args, shadow_values)
-
         if args.property_name == "brightness":
             brightness_values = np.linspace(0.0, 2.0, 21)
             if args.min_property_value != -1.0 and args.max_property_value != -1.0:
                 brightness_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
             test_property_shift(args, brightness_values)
+
+        if args.property_name == "depth_level":
+            depth_values = np.linspace(0.1, 1.0, 10)
+            if args.min_property_value != -1.0 and args.max_property_value != -1.0:
+                depth_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
+            test_property_shift(args, depth_values)
         
     

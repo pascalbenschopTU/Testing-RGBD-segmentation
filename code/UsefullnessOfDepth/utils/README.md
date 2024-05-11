@@ -30,3 +30,9 @@ python .\utils\dformer_gradcam.py ^
 -a ^
 -t 0
 ```
+
+For removing backgrounds:
+
+```
+python .\utils\background_remover.py -mw .\checkpoints\SynthDet_cars_foreground_background_simple_textures_DFormer-Tiny\run_20240510-162400_depth_augmented\epoch_60_miou_10.704.pth -c .\configs\SynthDet\SynthDet_cars_foreground_background_simple_textures_DFormer.py -d .\datasets\SynthDet_carse_foreground_background_diff_white\
+```
