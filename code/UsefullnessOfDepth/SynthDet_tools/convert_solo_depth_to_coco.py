@@ -27,9 +27,13 @@ def extract_depth_from_exr(exr_path, min_depth, max_depth):
     # Reshape the flattened array to the original image shape
     depth_image = depth_image.reshape((height, width, 1))
 
-    min_d = np.min(depth_image)
-    max_d = np.max(depth_image)
-    if min_d < min_depth or max_d > max_depth:
+    min_d = np.min(depth_image[depth_image > 0])
+    max_d = np.max(depth_image[depth_image > 0])
+    if min_depth == -1.0 and max_depth == -1.0:
+        normalized_depth = (depth_image - min_d) / (max_d - min_d)
+        normalized_depth = np.clip(normalized_depth, 0.0, 1.0)
+        
+    elif min_d < min_depth or max_d > max_depth:
         print(f"Warning: Depth values are outside the expected range [{min_depth}, {max_depth}]")
         print(f"Min depth: {min_d}, Max depth: {max_d}")
 

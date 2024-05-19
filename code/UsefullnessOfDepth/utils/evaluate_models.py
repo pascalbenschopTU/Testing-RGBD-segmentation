@@ -2,12 +2,17 @@ import argparse
 import importlib
 import os
 import sys
-
-sys.path.append('../UsefullnessOfDepth')
-
+from tqdm import tqdm
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
 import torch
 import torch.nn as nn
 from torchmetrics import JaccardIndex
+
+sys.path.append('../UsefullnessOfDepth')
+
 # Model
 from model_DFormer.builder import EncoderDecoder as segmodel
 from models_CMX.builder import EncoderDecoder as cmxmodel
@@ -17,13 +22,8 @@ from models_segformer import SegFormer
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.dataloader.dataloader import get_val_loader, get_train_loader
 from utils.engine.logger import get_logger
+from utils.metrics_new import Metrics
 
-from metrics_new import Metrics
-from tqdm import tqdm
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from datetime import datetime
 
 class Evaluator(object):
     def __init__(self, num_class, ignore_index=255):
@@ -121,7 +121,7 @@ def set_config_if_dataset_specified(config, dataset_location):
     config.eval_source = os.path.join(config.dataset_path, "test.txt")
     return config
 
-def set_model_weights_if_not_specified(config, args):
+def set_model_weights_if_not_specified(config):
     try:
         config_dir = "checkpoints"
         dataset_name = config.dataset_name
@@ -136,17 +136,28 @@ def set_model_weights_if_not_specified(config, args):
         for file in os.listdir(last_run_dir):
             if "pth" in file:
                 last_model_weights_file = file
-        args.model_weights = os.path.join(last_run_dir, last_model_weights_file)
-        logger.info(f"Using model weights file: {args.model_weights}")
+        model_weights = os.path.join(last_run_dir, last_model_weights_file)
+        logger.info(f"Using model weights file: {model_weights}")
     except Exception as e:
         logger.error(f"Could not find model weights file. Please specify it using --model_weights. Error: {e}")
-        return args
-    return args
+        sys.exit(1)
+    return model_weights
 
-
+# , results_file="results.txt")
 logger = get_logger()
-def get_scores_for_model(args, results_file="results.txt"):
-    module_name = args.config
+def get_scores_for_model(
+        model, 
+        config, 
+        model_weights, 
+        dataset=None, 
+        bin_size=1000, 
+        ignore_background=False, 
+        background_only=False,
+        x_channels=-1,
+        x_e_channels=-1, 
+        results_file="results.txt"
+    ):
+    module_name = config
     if ".py" in module_name:
         module_name = module_name.replace(".py", "")
         module_name = module_name.replace("\\", ".")
@@ -155,27 +166,30 @@ def get_scores_for_model(args, results_file="results.txt"):
 
     config_module = importlib.import_module(module_name)
     config = config_module.config
+    if x_channels != -1 and x_e_channels != -1:
+        config.x_channels = x_channels
+        config.x_e_channels = x_e_channels
 
-    if args.model is not None:
-        if args.model == "DFormer-Tiny":
+    if model is not None:
+        if model == "DFormer-Tiny":
             config.backbone = "DFormer-Tiny"
-        if args.model == "DFormer-Large":
+        if model == "DFormer-Large":
             config.backbone = "DFormer-Large"
-        if args.model == "CMX_B2":
+        if model == "CMX_B2":
             config.backbone = "mit_b2"
-        if args.model == "Xception":
+        if model == "Xception":
             config.backbone = "xception"
-        if args.model == "segformer":
+        if model == "segformer":
             config.backbone = "segformer"
 
-    if args.model_weights is None or not ".pth" in args.model_weights or not config.backbone in args.model_weights:
-        args = set_model_weights_if_not_specified(config, args)
+    if model_weights is None or not ".pth" in model_weights or not config.backbone in model_weights:
+        model_weights = set_model_weights_if_not_specified(config, args)
 
-    model_weights_dir = os.path.dirname(args.model_weights)
+    model_weights_dir = os.path.dirname(model_weights)
     model_results_file = os.path.join(model_weights_dir, results_file)
 
-    if hasattr(args, "dataset") and args.dataset is not None:
-        config = set_config_if_dataset_specified(config, args.dataset)
+    if dataset is not None:
+        config = set_config_if_dataset_specified(config, dataset)
 
     val_loader, val_sampler = get_val_loader(None, RGBXDataset,config,1)
 
@@ -191,9 +205,9 @@ def get_scores_for_model(args, results_file="results.txt"):
     if config.backbone == "segformer":
         model = SegFormer(cfg=config, criterion=criterion)
 
-    weight = torch.load(args.model_weights)['model']
-    # print('load model: ', args.model_weights)
-    logger.info(f'load model {config.backbone} weights : {args.model_weights}')
+    weight = torch.load(model_weights)['model']
+    # print('load model: ', model_weights)
+    logger.info(f'load model {config.backbone} weights : {model_weights}')
     model.load_state_dict(weight, strict=False)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -210,12 +224,14 @@ def get_scores_for_model(args, results_file="results.txt"):
     with torch.no_grad():
         model.eval()
         device = torch.device('cuda')
-        metric, mious, iou_stds = evaluate(model, val_loader,config, device, bin_size=args.bin_size)
-        if hasattr(args, 'ignore_background') and args.ignore_background:
+        metric, mious, iou_stds = evaluate(model, val_loader,config, device, bin_size=bin_size)
+        if ignore_background:
             metric.confusion_matrix = metric.confusion_matrix[1:, 1:]
             class_names = class_names[1:]
         # miou = metric.Mean_Intersection_over_Union()
         ious, iou_std, miou = metric.compute_iou()
+        if background_only:
+            miou = ious[0]
         acc, macc = metric.compute_pixel_acc()
         mf1 = metric.F1_Score()
         pixel_acc_class = metric.Pixel_Accuracy_Class()
@@ -260,6 +276,8 @@ def get_scores_for_model(args, results_file="results.txt"):
             f.write(f'miou: {miou:.2f}, macc: {macc:.2f}, mf1: {mf1:.2f}, mious: [{", ".join([f"{iou:.2f}" for iou in mious])}], iou_stds: [{", ".join([f"{iou_std:.2f}" for iou_std in iou_stds])}]\n')
             f.write(f'model parameters: {num_params}\n')
 
+        return miou
+
             
             
 @torch.no_grad()
@@ -278,14 +296,14 @@ def evaluate(model, dataloader, config, device, bin_size=1):
         images = minibatch["data"][0]
         labels = minibatch["label"][0]
         modal_xs = minibatch["modal_x"][0]
-        # print(images.shape,labels.shape)
+
         images = [images.to(device), modal_xs.to(device)]
         labels = labels.to(device)
         preds = model(images[0], images[1]).softmax(dim=1)
 
         if len(labels.shape) == 2:
             labels = labels.unsqueeze(0)
-        # print(preds.shape,labels.shape)
+
         # metrics.update(preds, labels)
         evaluator.add_batch(labels.cpu().numpy(), preds.argmax(1).cpu().numpy())
         bin_evaluator.add_batch(labels.cpu().numpy(), preds.argmax(1).cpu().numpy())
@@ -327,13 +345,23 @@ def evaluate_torch(model, dataloader, config, device):
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--config', help='train config file path')
-    argparser.add_argument('--model_weights', help='File of model weights', default=None)
-    argparser.add_argument('--model', help='Model name', default='DFormer-Tiny')
-    argparser.add_argument('--bin_size', help='Bin size for testing', default=1, type=int)
-    argparser.add_argument('--dataset', help='Dataset dir')
-    argparser.add_argument('--ignore_background', action='store_true', help='Ignore background class')
+    argparser.add_argument('-c', '--config', help='train config file path')
+    argparser.add_argument('-mw', '--model_weights', help='File of model weights')
+    argparser.add_argument('-d', '--dataset', default=None, help='Dataset dir')
+
+    argparser.add_argument('-m', '--model', help='Model name', default='DFormer-Tiny')
+    argparser.add_argument('-b', '--bin_size', help='Bin size for testing', default=1000, type=int)
+    argparser.add_argument('-ib', '--ignore_background', action='store_true', help='Ignore background class')
+    argparser.add_argument('-bo', '--background_only', action='store_true', help='Evaluate only background class')
 
     args = argparser.parse_args()
 
-    get_scores_for_model(args)
+    get_scores_for_model(
+        model_weights=args.model_weights,
+        config=args.config,
+        model=args.model,
+        dataset=args.dataset,
+        bin_size=args.bin_size,
+        ignore_background=args.ignore_background,
+        background_only=args.background_only
+    )

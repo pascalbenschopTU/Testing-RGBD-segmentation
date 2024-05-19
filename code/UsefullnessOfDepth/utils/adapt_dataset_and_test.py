@@ -87,29 +87,23 @@ def adapt_property(origin_directory_path, destination_directory_path, property_v
 
 
 def test_property_shift(args, property_values):
+    model_weights_dir = os.path.dirname(args.model_weights)
+    results_file_name = f"{args.property_name}_tests.txt"
+    model_results_file = os.path.join(model_weights_dir, results_file_name) 
+    with open(model_results_file, "a") as result_file:
+        result_file.write(f"Property: {args.property_name}\n")
+        result_file.write(f"Property values: {property_values}\n")
+        result_file.write(f"Model: {args.model}\n")
+        result_file.write(f"Config: {args.config}\n")
+        result_file.write(f"Dataset: {args.origin_directory_path}\n")
+        result_file.write("\n")
+
     for property_value in property_values:
         adapt_property(args.origin_directory_path, args.destination_directory_path, property_value, args.property_name, args.split)
         config_module = importlib.import_module(args.config)
         config = config_module.config
 
-        if config.x_e_channels == 3:
-            dataset_dir = os.path.dirname(os.path.dirname(args.origin_directory_path))
-            depth_dir = os.path.join(dataset_dir, 'Depth')
-            if not os.path.exists(depth_dir):
-                os.makedirs(depth_dir)
-
-            # Check for the first file if it single channel
-            if len(os.listdir(depth_dir)) > 0:
-                depth_image = Image.open(os.path.join(depth_dir, os.listdir(depth_dir)[0]))
-                if len(np.array(depth_image).shape) == 2:
-                    # Move Depth folder to Depth_original
-                    os.rename(depth_dir, os.path.join(dataset_dir, 'Depth_original'))
-
-            for file in os.listdir(args.destination_directory_path):
-                if file.startswith(args.split):
-                    shutil.copy(os.path.join(args.destination_directory_path, file), os.path.join(depth_dir, file))
-
-        get_scores_for_model(args, f"{args.property_name}_tests.txt")
+        get_scores_for_model(args, results_file_name)
 
     
 def update_config_with_model(args):
@@ -148,8 +142,8 @@ if __name__ == "__main__":
     argparser.add_argument("-m", '--model', help='Model name', default='DFormer-Tiny')
     argparser.add_argument("-bs", '--bin_size', help='Bin size for testing', default=1, type=int)
     argparser.add_argument("-pname", '--property_name', help='Property name', default='saturation')
-    argparser.add_argument("-minpv", '--min_property_value', help='Minimum property value', default=-1.0, type=float)
-    argparser.add_argument("-maxpv", '--max_property_value', help='Maximum property value', default=-1.0, type=float)
+    argparser.add_argument("-pmin", '--min_property_value', help='Minimum property value', default=-1.0, type=float)
+    argparser.add_argument("-pmax", '--max_property_value', help='Maximum property value', default=-1.0, type=float)
     argparser.add_argument("-pvr", '--property_value_range', help='Property value range', default=10, type=int)
 
     args = argparser.parse_args()
@@ -167,19 +161,19 @@ if __name__ == "__main__":
 
     if args.config is not None:
         if args.property_name == "saturation":
-            saturation_values = np.linspace(0.001, 5.0, 10)
+            saturation_values = np.linspace(0.01, 3.0, 10)
             if args.min_property_value != -1.0 and args.max_property_value != -1.0:
                 saturation_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
             test_property_shift(args, saturation_values)
 
         if args.property_name == "hue":
-            hue_values = np.linspace(-0.5, 0.5, 36)
+            hue_values = np.linspace(-0.5, 0.5, 11)
             if args.min_property_value != -1.0 and args.max_property_value != -1.0:
                 hue_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
             test_property_shift(args, hue_values)
 
         if args.property_name == "brightness":
-            brightness_values = np.linspace(0.0, 2.0, 21)
+            brightness_values = np.linspace(0.01, 3.0, 10)
             if args.min_property_value != -1.0 and args.max_property_value != -1.0:
                 brightness_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
             test_property_shift(args, brightness_values)

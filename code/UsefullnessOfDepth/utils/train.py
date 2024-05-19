@@ -2,9 +2,7 @@ import os
 import sys
 import time
 import json
-
-sys.path.append('../UsefullnessOfDepth')
-
+import random
 import argparse
 from tqdm import tqdm
 import importlib
@@ -13,6 +11,8 @@ import torch.nn as nn
 from torchvision.utils import make_grid
 from tensorboardX import SummaryWriter
 import numpy as np
+
+sys.path.append('../UsefullnessOfDepth')
 
 # Model
 from model_DFormer.builder import EncoderDecoder as segmodel
@@ -26,9 +26,8 @@ from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.init_func import init_weight, group_weight, configure_optimizers
 from utils.lr_policy import WarmUpPolyLR
 from utils.evaluate_models import evaluate_torch
-
-from hyperparameter_tuning import tune_hyperparameters
-from update_config import update_config
+from utils.hyperparameter_tuning import tune_hyperparameters
+from utils.update_config import update_config
 
 class TensorboardSummary(object):
     def __init__(self, directory):
@@ -99,12 +98,37 @@ def setup_dirs(config):
 
     return tb, tb_summary
 
-def train_dformer(config, args):
+def set_seed(seed):
+    # seed init.
+    random.seed(seed)
+    np.random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+    # torch seed init.
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.enabled = (
+        True  # train speed is slower after enabling this opts.
+    )
+
+    # https://pytorch.org/docs/stable/generated/torch.use_deterministic_algorithms.html
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+
+    # avoiding nondeterministic algorithms (see https://pytorch.org/docs/stable/notes/randomness.html)
+    torch.use_deterministic_algorithms(True, warn_only=True)
+
+def train_model_from_config(config):
     import torch
     torch.set_float32_matmul_precision("high")
     import torch._dynamo
 
     torch._dynamo.config.suppress_errors = True
+
+    # set_seed(config.seed)
 
     tb, tb_summary = setup_dirs(config)
 
@@ -114,15 +138,18 @@ def train_dformer(config, args):
         # 'random_noise_rgb_amount': 1.0,
         # 'random_black': True,
         # 'random_black_prob': 0.1,
-        'random_mirror': True,
-        'random_crop_and_scale': True,
+        # 'random_mirror': True,
+        # 'random_crop_and_scale': True,
+        # 'random_crop': True,
     }
 
     train_loader, _ = get_train_loader(None, RGBXDataset, config, **train_loader_args)
     val_loader, _ = get_val_loader(None, RGBXDataset, config, 1)
 
     # Dont ignore the background class
-    criterion = nn.CrossEntropyLoss(reduction='mean') #, ignore_index=config.background)
+    criterion = nn.CrossEntropyLoss(reduction='mean')
+    if train_loader_args.get('random_crop_and_scale', False):
+        criterion = nn.CrossEntropyLoss(reduction='none', ignore_index=config.background)
     BatchNorm2d = nn.BatchNorm2d
     
     if "DFormer" in config.backbone:
@@ -157,13 +184,14 @@ def train_dformer(config, args):
     start_epoch = 1
 
     if config.pretrained_model is not None:
-        print('loading pretrained model from %s' % config.pretrained_model)
         checkpoint = torch.load(config.pretrained_model, map_location=device)
-        model.load_state_dict(checkpoint['model'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        start_epoch = checkpoint['epoch'] + 1
-        current_idx = checkpoint['iteration']
-        print('starting from epoch: ', start_epoch, 'iteration: ', current_idx)
+        if 'model' in checkpoint:
+            print('loading pretrained model from %s' % config.pretrained_model)
+            model.load_state_dict(checkpoint['model'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            start_epoch = checkpoint['epoch'] + 1
+            current_idx = checkpoint['iteration']
+            print('starting from epoch: ', start_epoch, 'iteration: ', current_idx)
 
     optimizer.zero_grad()
     best_miou=0.0
@@ -189,7 +217,10 @@ def train_dformer(config, args):
     
             # loss = model(imgs, modal_xs, gts)
             output = model(imgs, modal_xs)
-            loss = criterion(output, gts.long())
+            if train_loader_args.get('random_crop_and_scale', False):
+                loss = criterion(output, gts.long())[gts.long() != config.background].mean()
+            else:
+                loss = criterion(output, gts.long())
             
             optimizer.zero_grad()
             loss.backward()
@@ -203,7 +234,7 @@ def train_dformer(config, args):
 
             sum_loss += loss.item()
 
-            if (epoch % config.checkpoint_step == 0 and epoch > int(config.checkpoint_start_epoch)) and idx == 0:
+            if (epoch % config.checkpoint_step == 0 and epoch > int(config.checkpoint_start_epoch) or epoch == 1) and idx == 0:
                 tb_summary.visualize_image(tb, imgs, modal_xs, gts, model(imgs, modal_xs), epoch, config=config)
 
             print_str = 'Epoch {}/{}'.format(epoch, config.nepochs) \
@@ -263,57 +294,140 @@ def save_checkpoint(model, optimizer, epoch, iteration, path):
 
     torch.save(state_dict, path)
 
-def prepare_SynthDet_config(args):
-    config_path = args.config
-    model_name = args.model.split('-')[0]
-    dataset_name = config_path.split('SynthDet.')[-1].split(f"_{model_name}")[0]
-    if "Dformer" in dataset_name:
-        dataset_name = dataset_name.split(f"_{model_name}")[0]
+def prepare_SynthDet_config(config_location, model, dataset_classes, x_channels, x_e_channels, num_epochs, dataset_name=None):
+    config_path = config_location
+    model_name = model.split('-')[0]
+    if dataset_name is None:
+        dataset_name = config_path.split('SynthDet.')[-1].split(f"_{model_name}")[0]
+        if "Dformer" in dataset_name:
+            dataset_name = dataset_name.split(f"_{model_name}")[0]
     
-    update_config(
-        args.config, 
+    new_config = update_config(
+        config_location, 
         {
             "dataset_name": dataset_name, 
-            "classes": args.dataset_type, 
-            "x_channels": args.x_channels, 
-            "x_e_channels": args.x_e_channels,
-            "nepochs": args.num_epochs,
+            "classes": dataset_classes, 
+            "x_channels": x_channels, 
+            "x_e_channels": x_e_channels,
+            "nepochs": num_epochs,
         }
     )
 
-def prepare_SUNRGBD_config(args):
-    update_config(
-        args.config, 
+    return new_config
+
+def prepare_SUNRGBD_config(config_location, x_channels, x_e_channels, num_epochs):
+    new_config = update_config(
+        config_location, 
         { 
-            "x_channels": args.x_channels, 
-            "x_e_channels": args.x_e_channels,
-            "nepochs": args.num_epochs,
+            "x_channels": x_channels, 
+            "x_e_channels": x_e_channels,
+            "nepochs": num_epochs,
         }
     )
 
-def run_hyperparameters(args, config, file_path):
-    final_config, best_config_dict = tune_hyperparameters(
+    return new_config
+
+def run_hyperparameters(config_location, file_path, num_samples, num_hyperparameter_epochs):
+    config = importlib.import_module(config_location).config
+
+    best_config_dict = tune_hyperparameters(
         config, 
-        num_samples=args.num_samples, 
-        max_num_epochs=args.num_hyperparameter_epochs, 
+        num_samples=num_samples, 
+        max_num_epochs=num_hyperparameter_epochs, 
         cpus_per_trial=8, 
         gpus_per_trial=1
     )
     
+    # Write best hyperparameters to file
     try:
-        if not os.path.exists(final_config.log_dir):
-            os.makedirs(final_config.log_dir, exist_ok=True)
-        with open(file_path, 'w') as file:
-            file.write(str(best_config_dict))
+        if not os.path.exists(config.log_dir):
+            os.makedirs(config.log_dir, exist_ok=True)
+        with open(file_path, 'a') as file:
+            # Append time to best hyperparameters config
+            best_config_dict["date_time"] = time.strftime('%Y%m%d-%H%M%S', time.localtime()).replace(' ','_')
+            file.write(str(best_config_dict) + "\n")
     except Exception as e:
         print(f"Error occurred while writing to file: {e}")
 
-    update_config(
-        args.config, 
+    # Update the training config with the best hyperparameters
+    config = update_config(
+        config_location, 
         best_config_dict
     )
 
-    return final_config
+    return config
+
+def train_model(config_location: str, 
+                checkpoint_dir: str="checkpoints", 
+                model: str="DFormer-Tiny", 
+                dataset_classes: str="random", 
+                num_hyperparameter_samples: int=20, 
+                num_hyperparameter_epochs: int=5, 
+                num_epochs: int=60, 
+                x_channels: int=3, 
+                x_e_channels: int=1,
+                dataset_name: str=None, 
+                gpus: int=1,
+    ):
+
+    if "SynthDet" in config_location:
+        config = prepare_SynthDet_config(config_location, model, dataset_classes, x_channels, x_e_channels, num_epochs, dataset_name)
+    elif "SUNRGBD" in config_location:
+        config = prepare_SUNRGBD_config(config_location, x_channels, x_e_channels, num_epochs)
+
+    if model == "DFormer-Tiny":
+        config.decoder = "ham"
+        config.backbone = "DFormer-Tiny"
+    if model == "DFormer-Large":
+        config.decoder = "ham"
+        config.backbone = "DFormer-Large"
+        config.drop_path_rate = 0.2
+    if model == "CMX-B2":
+        config.decoder = "MLPDecoder"
+        config.backbone = "mit_b2"
+    if model == "DeepLab":
+        config.backbone = "xception"
+    if model == "segformer":
+        config.backbone = "segformer"
+
+    config = update_config(
+        config_location, 
+        {
+            "backbone": config.backbone,
+            "decoder": config.decoder,
+            "checkpoint_dir": checkpoint_dir,
+        }
+    )
+
+    file_path = os.path.join(config.log_dir, f"x_{x_channels}_x_e_{x_e_channels}_best_hyperparameters.txt")
+
+    if num_hyperparameter_epochs == -1:
+        try:
+            with open(file_path, 'r') as file:
+                # Read the file as a string
+                data = file.readlines()[-1]
+
+            # Replace single quotes with double quotes
+            data = data.replace("'", '"')
+
+            # Load the string as JSON
+            hyperparameters = json.loads(data)
+
+            config = update_config(
+                config_location,
+                hyperparameters
+            )
+            print(f"Using hyperparameters from file: {hyperparameters}")
+        except Exception as e:
+            print(f"Error while processing hyperparameters: {e}")
+            print("Getting new hyperparameters")
+            config = run_hyperparameters(config_location, file_path, num_hyperparameter_samples, num_hyperparameter_epochs)
+    if num_hyperparameter_epochs > 0:
+        config = run_hyperparameters(config_location, file_path, num_hyperparameter_samples, num_hyperparameter_epochs)
+
+    best_miou = train_model_from_config(config)
+
+    return best_miou, config
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -330,25 +444,19 @@ if __name__ == "__main__":
         help="The model to use for training the model, choose DFormer, CMX or DeepLab",
     )
     parser.add_argument(
-        "--gpus",
-        type=int,
-        default=1,
-        help="The number of GPUs to use for training",
-    ),
-    parser.add_argument(
         "--checkpoint_dir",
         type=str,
         default="checkpoints",
         help="The directory to save the model checkpoints",
     )
     parser.add_argument(
-        "--dataset_type",
+        "--dataset_classes",
         type=str,
         default="groceries",
         help="The type of dataset to use for training",
     )
     parser.add_argument(
-        "--num_samples",
+        "--num_hyperparameter_samples",
         type=int,
         default=20,
         help="The number of samples to use for hyperparameter tuning",
@@ -377,72 +485,25 @@ if __name__ == "__main__":
         default=1,
         help="The number of channels in the x_e modalities",
     )
+    parser.add_argument(
+        "--gpus",
+        type=int,
+        default=1,
+        help="The number of GPUs to use for training",
+    )
     args = parser.parse_args()
 
-    if "SynthDet" in args.config:
-        prepare_SynthDet_config(args)
-    elif "SUNRGBD" in args.config:
-        prepare_SUNRGBD_config(args)
-
-    config_module = importlib.reload(importlib.import_module(args.config))
-    config = config_module.config
-
-    if args.model == "DFormer-Tiny":
-        config.decoder = "ham"
-        config.backbone = "DFormer-Tiny"
-    if args.model == "DFormer-Large":
-        config.decoder = "ham"
-        config.backbone = "DFormer-Large"
-        config.drop_path_rate = 0.2
-    if args.model == "CMX-B2":
-        config.decoder = "MLPDecoder"
-        config.backbone = "mit_b2"
-    if args.model == "DeepLab":
-        config.backbone = "xception"
-    if args.model == "segformer":
-        config.backbone = "segformer"
-
-    update_config(
+    best_miou, config = train_model(
         args.config, 
-        {
-            "backbone": config.backbone,
-            "decoder": config.decoder,
-        }
+        args.checkpoint_dir, 
+        args.model, 
+        args.dataset_classes, 
+        args.num_hyperparameter_samples, 
+        args.num_hyperparameter_epochs, 
+        args.num_epochs, 
+        args.x_channels, 
+        args.x_e_channels, 
+        args.gpus
     )
 
-    config_module = importlib.reload(importlib.import_module(args.config))
-    config = config_module.config
-
-    file_path = os.path.join(config.log_dir, f"x_{args.x_channels}_x_e_{args.x_e_channels}_best_hyperparameters.txt")
-
-    if args.num_hyperparameter_epochs == 0:
-        final_config = config
-    elif args.num_hyperparameter_epochs == -1:
-        final_config = config
-        try:
-            with open(file_path, 'r') as file:
-                # Read the file as a string
-                data = file.read()
-
-            # Replace single quotes with double quotes
-            data = data.replace("'", '"')
-
-            # Load the string as JSON
-            hyperparameters = json.loads(data)
-
-            update_config(
-                args.config,
-                hyperparameters
-            )
-
-            config_module = importlib.reload(importlib.import_module(args.config))
-            final_config = config_module.config
-            print(f"Using hyperparameters from file: {hyperparameters}")
-        except Exception as e:
-            print(f"Error while processing hyperparameters: {e}")
-            print("Getting new hyperparameters")
-            final_config = run_hyperparameters(args, config, file_path)
-    else:
-        final_config = run_hyperparameters(args, config, file_path)
-
-    best_miou = train_dformer(final_config, args)
+    print(f"Best mIoU: {best_miou}")

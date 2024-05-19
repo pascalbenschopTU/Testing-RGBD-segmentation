@@ -10,7 +10,7 @@ C = edict()
 config = C
 cfg = C
 
-# C.seed = 12345
+C.seed = 12345
 
 remoteip = os.popen('pwd').read()
 C.root_dir = 'datasets'#os.path.abspath(os.path.join(os.getcwd(), './'))
@@ -37,7 +37,6 @@ C.num_train_imgs = 5285
 C.num_eval_imgs = 5050
 C.num_classes = 38
 C.class_names =  ['bg', 'wall','floor','cabinet','bed','chair','sofa','table','door','window','bookshelf','picture','counter','blinds','desk','shelves','curtain','dresser','pillow','mirror','floor_mat','clothes','ceiling','books','fridge','tv','paper','towel','shower_curtain','box','whiteboard','person','night_stand','toilet','sink','lamp','bathtub','bag']
-C.classes = 38
 
 """Image Config"""
 C.background = 0
@@ -47,20 +46,19 @@ C.norm_mean = np.array([0.485, 0.456, 0.406])
 C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
-C.backbone = 'mit_b2'
-# code\UsefullnessOfDepth\checkpoints\SUNRGBD_DFormer-Large\run_20240427-205208\epoch_30_miou_25.014.pth
-# code\UsefullnessOfDepth\checkpoints\SUNRGBD_DFormer-Tiny\run_20240506-171857\epoch_30_miou_20.097.pth
-C.pretrained_model = None #'checkpoints/SUNRGBD_DFormer-Tiny/run_20240506-171857/epoch_30_miou_20.097.pth' # 'checkpoints/SUNRGBD_DFormer-Large/run_20240427-205208/epoch_30_miou_25.014.pth' # None #'checkpoints/pretrained/DFormer_Tiny.pth.tar'
-C.decoder = 'MLPDecoder'
+C.backbone = 'DFormer-Tiny'
+# code\UsefullnessOfDepth\checkpoints\SUNRGBD_DFormer-Tiny\run_20240517-121231\epoch_30_miou_12.344.pth
+C.pretrained_model = None #'checkpoints/SUNRGBD_DFormer-Tiny/run_20240517-121231/epoch_30_miou_12.344.pth' #'checkpoints/pretrained/DFormer_Tiny.pth.tar'
+C.decoder = 'ham'
 C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'
 
 """Train Config"""
-C.lr = 0.0004663682417737205
-C.lr_power = 0.8538534048156381
-C.momentum = 0.9753656283194544
-C.weight_decay = 0.0004357202955954632
-C.batch_size = 4
+C.lr = 0.001 #8e-5
+C.lr_power = 0.9
+C.momentum = 0.9
+C.weight_decay = 0.01
+C.batch_size = 16
 C.nepochs = 60
 C.niters_per_epoch = C.num_train_imgs // C.batch_size  + 1
 C.num_workers = 1
@@ -93,7 +91,7 @@ add_path(osp.join(C.root_dir))
 C.log_dir = osp.abspath('checkpoints/' + C.dataset_name + '_' + C.backbone)
 C.tb_dir = osp.abspath(osp.join(C.log_dir, "tb"))
 C.log_dir_link = C.log_dir
-C.checkpoint_dir = osp.abspath(osp.join(C.log_dir, "checkpoint"))
+C.checkpoint_dir = osp.abspath(osp.join(C.log_dir, "checkpoint"))#'/mnt/sda/repos/2023_RGBX/pretrained/'#osp.abspath(osp.join(C.log_dir, "checkpoint"))
 
 exp_time = time.strftime('%Y_%m_%d_%H_%M_%S', time.localtime())
 C.log_file = C.log_dir + '/log_' + exp_time + '.log'
@@ -110,6 +108,5 @@ if __name__ == '__main__':
 
     if args.tensorboard:
         open_tensorboard()
-
-C.x_channels = 3
+C.x_channels = 1
 C.x_e_channels = 1

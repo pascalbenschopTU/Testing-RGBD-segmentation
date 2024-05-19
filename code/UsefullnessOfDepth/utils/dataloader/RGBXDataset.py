@@ -46,8 +46,8 @@ class RGBXDataset(data.Dataset):
         gt_path = os.path.join(self._gt_path, item_name.replace('.jpg','').replace('.png','')  + self._gt_format)
 
         gt = self._open_image(gt_path, cv2.IMREAD_UNCHANGED, dtype=np.uint8)
-        rgb = self._open_image(rgb_path, cv2.IMREAD_UNCHANGED, dtype=np.float32)
-        x = self._open_image(x_path, cv2.IMREAD_UNCHANGED, dtype=np.float32)
+        rgb = self._open_image(rgb_path, cv2.COLOR_BGR2RGB)
+        x = self._open_image(x_path, cv2.IMREAD_GRAYSCALE)
 
         if self.preprocess is not None:
             rgb, gt, x = self.preprocess(rgb, gt, x)

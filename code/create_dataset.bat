@@ -2,11 +2,9 @@ REM This script is used to convert the dataset from SOLO format to COCO format a
 set dataset_location=%1
 set dataset_name=%2
 set dataset_type=%3
-set test_only=%4
-
-@REM set min_depth=50
-set min_depth=90
-set max_depth=110
+set train_split=%4
+set min_depth=%5
+set max_depth=%6
 
 set use_edge_enhancement=false
 
@@ -16,16 +14,25 @@ IF "%dataset_type%" == "" (
     set dataset_type=groceries
 )
 
-IF "%test_only%" == "" (
-    set test_only=False
+IF "%train_split%" == "" (
+    set train_split=0.5
 )
 
-@REM IF EXIST "DFormer\datasets\SynthDet_%dataset_name%" goto :skip_dataset_creation
+IF "%min_depth%" == "" (
+    set min_depth=-1
+)
 
-@REM Creating dataset
+IF "%max_depth%" == "" (
+    set max_depth=-1
+)
+
+@REM @REM Creating dataset
 solo2coco %dataset_location% data\SynthDet\
 
+@REM Navigate to the SynthDet_tools directory
 cd UsefullnessOfDepth\SynthDet_tools
+
+@REM @REM Add depth to the dataset
 python convert_solo_depth_to_coco.py %dataset_location% ..\..\data\SynthDet\coco\depth --min_depth %min_depth% --max_depth %max_depth%
 
 @REM Rename the dataset to the correct name
@@ -33,7 +40,7 @@ move "..\..\data\SynthDet\coco" "..\..\data\SynthDet\coco_%dataset_name%"
 
 set dataset_path=..\..\data\SynthDet\coco_%dataset_name%
 @REM code\UsefullnessOfDepth
-python convert_coco_to_dformer.py %dataset_path% ..\datasets\SynthDet_%dataset_name% %dataset_type% --test_mode %test_only%
+python convert_coco_to_dformer.py %dataset_path% ..\datasets\SynthDet_%dataset_name% %dataset_type% --train_split %train_split%
 
 IF %use_edge_enhancement% == true (
     python add_edge_enhancement.py ..\datasets\SynthDet_%dataset_name%

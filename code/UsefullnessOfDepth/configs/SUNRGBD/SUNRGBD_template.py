@@ -46,28 +46,28 @@ C.norm_mean = np.array([0.485, 0.456, 0.406])
 C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
-C.backbone = 'DFormer-Large'
-C.pretrained_model = None #'checkpoints/SUNRGBD_DFormer-Large/run_20240427-183318/epoch_10_miou_11.162.pth' # None #'checkpoints/pretrained/DFormer_Large.pth.tar'
+C.backbone = 'DFormer-Tiny' # Remember change the path below.
+C.pretrained_model = None #'checkpoints/pretrained/DFormer_Tiny.pth.tar'
 C.decoder = 'ham'
 C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'
 
 """Train Config"""
-C.lr = 0.0036649641534738596
-C.lr_power = 0.9362148929060643
-C.momentum = 0.941173155668682
-C.weight_decay = 0.0018375186414884908
-C.batch_size = 4
-C.nepochs = 60
+C.lr = 0.001 #8e-5
+C.lr_power = 0.9
+C.momentum = 0.9
+C.weight_decay = 0.01
+C.batch_size = 16
+C.nepochs = 60 # 300
 C.niters_per_epoch = C.num_train_imgs // C.batch_size  + 1
 C.num_workers = 1
 C.train_scale_array = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
-C.warm_up_epoch = 10
+C.warm_up_epoch = 10 # TODO revert 10
 
 C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
-C.drop_path_rate=0.2
+C.drop_path_rate=0.1
 C.aux_rate =0.0
 
 """Eval Config"""
@@ -107,5 +107,3 @@ if __name__ == '__main__':
 
     if args.tensorboard:
         open_tensorboard()
-C.x_channels = 3
-C.x_e_channels = 1

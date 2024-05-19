@@ -1,6 +1,6 @@
 models/
 models2/
-checkpoints/
+checkpoints*
 datasets/
 mmseg/
 

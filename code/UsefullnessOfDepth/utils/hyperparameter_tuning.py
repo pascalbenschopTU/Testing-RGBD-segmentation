@@ -43,7 +43,7 @@ from ray.air.integrations.wandb import WandbLoggerCallback
 def evaluate(model, dataloader, config, device, criterion=nn.CrossEntropyLoss(reduction='mean')):
     model.eval()
     n_classes = config.num_classes
-    metrics = Metrics(n_classes, config.background, device)
+    metrics = Metrics(n_classes, 255, device)
 
     val_loss = 0.0
     val_steps = 0
@@ -109,7 +109,7 @@ def set_seed(seed):
     # avoiding nondeterministic algorithms (see https://pytorch.org/docs/stable/notes/randomness.html)
     torch.use_deterministic_algorithms(True, warn_only=True)
 
-def train_dformer(config, original_config, train_dataset, num_epochs=5):
+def train_dformer(config, original_config, train_dataset, num_epochs=5, max_dataset_size=1000):
     hyperparameters = config.copy()
     
     config = original_config
@@ -122,7 +122,12 @@ def train_dformer(config, original_config, train_dataset, num_epochs=5):
     config.nepochs = num_epochs
     config.warm_up_epoch = 1
 
-    # set_seed(config.seed)
+    set_seed(config.seed)
+
+    train_dataset, _ = torch.utils.data.random_split(
+        train_dataset, 
+        [max_dataset_size, len(train_dataset) - max_dataset_size],
+    )
 
     dataset_length = len(train_dataset)
     train_length = int(0.7 * dataset_length)
@@ -164,6 +169,8 @@ def train_dformer(config, original_config, train_dataset, num_epochs=5):
         raise NotImplementedError
 
     config.niters_per_epoch = train_size // config.batch_size + 1
+    if train_size % config.batch_size == 0:
+        config.niters_per_epoch = train_size // config.batch_size
     total_iteration = config.nepochs * config.niters_per_epoch
     lr_policy = WarmUpPolyLR(base_lr, config.lr_power, total_iteration, config.niters_per_epoch * config.warm_up_epoch)
 
@@ -231,7 +238,25 @@ def shorten_trial_dirname_creator(trial, experiment_name="empty"):
     short_trial_name = f"{experiment_name}_{trial.trial_id}"
     return short_trial_name
 
-def main(original_config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, gpus_per_trial=1, experiment_name="empty"):
+def update_config_paths(original_config):
+    # Make all paths in original_config absolute
+    original_config.dataset_path = os.path.abspath(original_config.dataset_path)
+    original_config.rgb_root_folder = os.path.abspath(original_config.rgb_root_folder)
+    original_config.gt_root_folder = os.path.abspath(original_config.gt_root_folder)
+    original_config.x_root_folder = os.path.abspath(original_config.x_root_folder)
+    original_config.log_dir = os.path.abspath(original_config.log_dir)
+    original_config.tb_dir = os.path.abspath(original_config.tb_dir)
+    original_config.checkpoint_dir = os.path.abspath(original_config.checkpoint_dir)
+    original_config.train_source = os.path.abspath(original_config.train_source)
+    original_config.eval_source = os.path.abspath(original_config.eval_source)
+    
+    return original_config
+
+def tune_hyperparameters(original_config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, gpus_per_trial=1):
+    original_config = update_config_paths(original_config)
+
+    experiment_name = f"{original_config.dataset_name}_{original_config.backbone}"
+
     param_space = {
         "lr": tune.loguniform(1e-5, 1e-1),
         "batch_size": tune.choice([4, 8, 16]),
@@ -312,23 +337,6 @@ def main(original_config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, g
     original_config.optimizer = best_config["optimizer"]
 
     return original_config, best_config
-
-def tune_hyperparameters(original_config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, gpus_per_trial=1):
-    # Make all paths in original_config absolute
-    original_config.dataset_path = os.path.abspath(original_config.dataset_path)
-    original_config.rgb_root_folder = os.path.abspath(original_config.rgb_root_folder)
-    original_config.gt_root_folder = os.path.abspath(original_config.gt_root_folder)
-    original_config.x_root_folder = os.path.abspath(original_config.x_root_folder)
-    original_config.log_dir = os.path.abspath(original_config.log_dir)
-    original_config.tb_dir = os.path.abspath(original_config.tb_dir)
-    original_config.checkpoint_dir = os.path.abspath(original_config.checkpoint_dir)
-    original_config.train_source = os.path.abspath(original_config.train_source)
-    original_config.eval_source = os.path.abspath(original_config.eval_source)
-
-    experiment_name = f"{original_config.dataset_name}_{original_config.backbone}"
-    
-    final_config, best_config_dict = main(original_config, num_samples, max_num_epochs, cpus_per_trial, gpus_per_trial, experiment_name)
-    return final_config, best_config_dict
 
 
 if __name__ == "__main__":

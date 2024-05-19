@@ -77,10 +77,21 @@ def normalize_image(image):
     image = (image - image.min()) / (image.max() - image.min())
     return image
 
-def removeBackground(model_weights_dir, dataset_dir, config, new_folder="background_removed"):
+def remove_background(
+        model_weights_dir, 
+        dataset_dir, 
+        config, 
+        new_folder="background_removed",
+        x_channels=1,
+        x_e_channels=1,
+        test_only=False
+    ):
     config = set_config_if_dataset_specified(config, dataset_dir)
+    config.x_channels = x_channels
+    config.x_e_channels = x_e_channels
     model = segmodel(cfg=config, criterion=nn.CrossEntropyLoss(reduction='mean'), norm_layer=nn.BatchNorm2d)
     model.load_state_dict(torch.load(model_weights_dir)["model"])
+    print(f"Model loaded from {model_weights_dir}")
     model = model.eval()
     model = model.to(device)
 
@@ -89,8 +100,11 @@ def removeBackground(model_weights_dir, dataset_dir, config, new_folder="backgro
         os.makedirs(new_rgb_folder)
 
     file_name_prefix = ["test", "train"]
+    dataloader_setting = ["val", "train"]
+    if test_only:
+        dataloader_setting = ["val"]
 
-    for idx, setting in enumerate(["val", "train"]):
+    for idx, setting in enumerate(dataloader_setting):
         dataloader, _ = get_val_loader(None, RGBXDataset, config, gpus=1, setting=setting)
         for i, minibatch in enumerate(tqdm(dataloader, dynamic_ncols=True)):
             image_tensor = minibatch["data"].to(device)
@@ -130,4 +144,4 @@ if __name__ == "__main__":
 
     config_module = importlib.import_module(args.config)
     config = config_module.config
-    removeBackground(args.model_weights_dir, args.dataset_dir, config, new_folder=args.new_folder)
+    remove_background(args.model_weights_dir, args.dataset_dir, config, new_folder=args.new_folder)
