@@ -1,16 +1,14 @@
 import torchvision.transforms.functional as F
 from PIL import Image
-import cv2
 import numpy as np
 import os
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import argparse
-import shutil
 import importlib
-from evaluate_models import get_scores_for_model
-from update_config import update_config
-from scipy.ndimage import gaussian_filter
+
+from utils.evaluate_models import get_scores_for_model
+from utils.update_config import update_config
 
 def adapt_dataset(origin_directory_path, destination_directory_path, property_value, adaptation_method, split):
     paths = [os.path.join(origin_directory_path, file) for file in os.listdir(origin_directory_path) if file.startswith(split)]
@@ -86,24 +84,52 @@ def adapt_property(origin_directory_path, destination_directory_path, property_v
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_depth_level, split)
 
 
-def test_property_shift(args, property_values):
-    model_weights_dir = os.path.dirname(args.model_weights)
-    results_file_name = f"{args.property_name}_tests.txt"
+def test_property_shift(
+        config, 
+        property_values, 
+        model_weights, 
+        property_name, 
+        origin_directory_path,
+        destination_directory_path,
+        model="DFormer-Tiny", 
+        split="test", 
+        device="cuda"
+    ):
+    model_weights_dir = os.path.dirname(model_weights)
+    results_file_name = f"{property_name}_tests.txt"
     model_results_file = os.path.join(model_weights_dir, results_file_name) 
     with open(model_results_file, "a") as result_file:
-        result_file.write(f"Property: {args.property_name}\n")
+        result_file.write(f"Property: {property_name}\n")
         result_file.write(f"Property values: {property_values}\n")
-        result_file.write(f"Model: {args.model}\n")
-        result_file.write(f"Config: {args.config}\n")
-        result_file.write(f"Dataset: {args.origin_directory_path}\n")
+        result_file.write(f"Model: {model}\n")
+        result_file.write(f"Config: {config}\n")
+        result_file.write(f"Dataset: {origin_directory_path}\n")
         result_file.write("\n")
 
+    miou_values = []
+
     for property_value in property_values:
-        adapt_property(args.origin_directory_path, args.destination_directory_path, property_value, args.property_name, args.split)
-        config_module = importlib.import_module(args.config)
+        adapt_property(origin_directory_path, destination_directory_path, property_value, property_name, split)
+        config_module = importlib.import_module(config)
         config = config_module.config
 
-        get_scores_for_model(args, results_file_name)
+        # get_scores_for_model(args, results_file_name)
+        miou = get_scores_for_model(
+            model=model,
+            config=config,
+            model_weights=model_weights,
+            dataset=destination_directory_path,
+            x_channels=3,
+            x_e_channels=1,
+            ignore_background=True,
+            results_file=model_results_file,
+            device=device,
+            create_confusion_matrix=False,
+        )
+
+        miou_values.append(miou)
+
+    return property_values, miou_values
 
     
 def update_config_with_model(args):
@@ -160,28 +186,25 @@ if __name__ == "__main__":
     update_config_with_model(args)
 
     if args.config is not None:
-        if args.property_name == "saturation":
-            saturation_values = np.linspace(0.01, 3.0, 10)
-            if args.min_property_value != -1.0 and args.max_property_value != -1.0:
-                saturation_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
-            test_property_shift(args, saturation_values)
+        property_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
+        if args.property_name == "saturation" and args.min_property_value == -1.0 and args.max_property_value == -1.0:
+            property_values = np.linspace(0.01, 3.0, 10)
+        if args.property_name == "hue" and args.min_property_value == -1.0 and args.max_property_value == -1.0:
+            property_values = np.linspace(-0.5, 0.5, 11)
+        if args.property_name == "brightness" and args.min_property_value == -1.0 and args.max_property_value == -1.0:
+            property_values = np.linspace(0.01, 3.0, 10)
 
-        if args.property_name == "hue":
-            hue_values = np.linspace(-0.5, 0.5, 11)
-            if args.min_property_value != -1.0 and args.max_property_value != -1.0:
-                hue_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
-            test_property_shift(args, hue_values)
+        test_property_shift(
+            config=args.config, 
+            property_values=property_values, 
+            model_weights=args.model_weights, 
+            property_name=args.property_name, 
+            origin_directory_path=args.origin_directory_path, 
+            destination_directory_path=args.destination_directory_path, 
+            model=args.model, 
+            split=args.split, 
+            device="cuda"
+        )
 
-        if args.property_name == "brightness":
-            brightness_values = np.linspace(0.01, 3.0, 10)
-            if args.min_property_value != -1.0 and args.max_property_value != -1.0:
-                brightness_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
-            test_property_shift(args, brightness_values)
-
-        if args.property_name == "depth_level":
-            depth_values = np.linspace(0.1, 1.0, 10)
-            if args.min_property_value != -1.0 and args.max_property_value != -1.0:
-                depth_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
-            test_property_shift(args, depth_values)
         
     

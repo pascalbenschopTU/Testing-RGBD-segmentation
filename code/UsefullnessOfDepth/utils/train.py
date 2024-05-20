@@ -458,7 +458,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_hyperparameter_samples",
         type=int,
-        default=20,
+        default=10,
         help="The number of samples to use for hyperparameter tuning",
     )
     parser.add_argument(
@@ -494,16 +494,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     best_miou, config = train_model(
-        args.config, 
-        args.checkpoint_dir, 
-        args.model, 
-        args.dataset_classes, 
-        args.num_hyperparameter_samples, 
-        args.num_hyperparameter_epochs, 
-        args.num_epochs, 
-        args.x_channels, 
-        args.x_e_channels, 
-        args.gpus
+        config_location=args.config,
+        checkpoint_dir=args.checkpoint_dir,
+        model=args.model,
+        dataset_classes=args.dataset_classes,
+        num_hyperparameter_samples=args.num_hyperparameter_samples,
+        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
+        num_epochs=args.num_epochs,
+        x_channels=args.x_channels,
+        x_e_channels=args.x_e_channels,
+        gpus=args.gpus
     )
 
     print(f"Best mIoU: {best_miou}")

@@ -109,7 +109,7 @@ def set_seed(seed):
     # avoiding nondeterministic algorithms (see https://pytorch.org/docs/stable/notes/randomness.html)
     torch.use_deterministic_algorithms(True, warn_only=True)
 
-def train_dformer(config, original_config, train_dataset, num_epochs=5, max_dataset_size=1000):
+def train_dformer(config, original_config, train_dataset, num_epochs=5):
     hyperparameters = config.copy()
     
     config = original_config
@@ -122,15 +122,10 @@ def train_dformer(config, original_config, train_dataset, num_epochs=5, max_data
     config.nepochs = num_epochs
     config.warm_up_epoch = 1
 
-    set_seed(config.seed)
-
-    train_dataset, _ = torch.utils.data.random_split(
-        train_dataset, 
-        [max_dataset_size, len(train_dataset) - max_dataset_size],
-    )
+    # set_seed(config.seed)
 
     dataset_length = len(train_dataset)
-    train_length = int(0.7 * dataset_length)
+    train_length = int(0.8 * dataset_length)
     validate_length = dataset_length - train_length
 
     train_subset, validate_subset = torch.utils.data.random_split(
@@ -329,14 +324,7 @@ def tune_hyperparameters(original_config, num_samples=20, max_num_epochs=5, cpus
 
     ray.shutdown()
 
-    original_config.lr = best_config["lr"]
-    original_config.lr_power = best_config["lr_power"]
-    original_config.momentum = best_config["momentum"]
-    original_config.weight_decay = best_config["weight_decay"]
-    original_config.batch_size = best_config["batch_size"]
-    original_config.optimizer = best_config["optimizer"]
-
-    return original_config, best_config
+    return best_config
 
 
 if __name__ == "__main__":

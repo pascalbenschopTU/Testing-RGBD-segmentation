@@ -52,6 +52,10 @@ def update_config(config_location, variables_to_update={}):
 def get_dataset_details(variables_to_update):
     dataset_name = variables_to_update["dataset_name"]
     # Walk the datasets folder and find the dataset location
+    if os.path.exists(dataset_name):
+        dataset_name = os.path.basename(os.path.normpath(dataset_name))
+        variables_to_update["dataset_name"] = dataset_name
+    
     dataset_location = None
     for root, dirs, files in os.walk('datasets'):
         for dir in dirs:

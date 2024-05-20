@@ -3,6 +3,7 @@ import sys
 import time
 import json
 import random
+import torch
 import argparse
 import importlib
 
@@ -13,6 +14,7 @@ from utils.train import train_model
 from utils.background_remover import remove_background
 from utils.evaluate_models import get_scores_for_model
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -94,6 +96,9 @@ if __name__ == "__main__":
     for dataset_name in os.listdir(args.dataset_dir):
         # Update the config with the dataset_name details
 
+        with open(log_file, "a") as f:
+            f.write(f"\nModel trained on dataset: {dataset_name}\n\n")
+
         rgbd_best_miou, config = train_model(
             config_location,
             checkpoint_dir=args.checkpoint_dir,
@@ -114,7 +119,7 @@ if __name__ == "__main__":
                     rgbd_model_weights_file = os.path.join(root, file)
 
         with open(log_file, "a") as f:
-            f.write(f"Dataset: {dataset_name}\nRGB-D mIoU: {rgbd_best_miou}\nModel best weights: {rgbd_model_weights_file}\n\n")
+            f.write(f"RGB-D mIoU: {rgbd_best_miou}\nModel best weights: {rgbd_model_weights_file}\n")
 
 
         depth_best_miou, config = train_model(
@@ -139,7 +144,7 @@ if __name__ == "__main__":
                     depth_model_weights_file = os.path.join(root, file)
 
         with open(log_file, "a") as f:
-            f.write(f"Dataset: {dataset_name}\nDepth mIoU: {depth_best_miou}\nModel best weights: {depth_model_weights_file}\n\n")
+            f.write(f"Depth mIoU: {depth_best_miou}\nModel best weights: {depth_model_weights_file}\n")
         
         
         remove_background(
@@ -186,16 +191,13 @@ if __name__ == "__main__":
                     rgb_background_removed_weights_file = os.path.join(root, file)
 
         with open(log_file, "a") as f:
-            f.write(f"Dataset: {dataset_name}\nRGB background removed mIoU: {rgb_background_removed_best_miou}\nModel best weights: {rgb_background_removed_weights_file}\n\n")
+            f.write(f"RGB background removed mIoU: {rgb_background_removed_best_miou}\nModel best weights: {rgb_background_removed_weights_file}\n\n")
 
         # Move RGB_original folder to RGB
         os.rename(rgb_folder, background_removed_folder)
         os.rename(rgb_original_folder, rgb_folder)
 
         for other_dataset_name in os.listdir(args.dataset_dir):
-            if other_dataset_name == dataset_name:
-                continue
-
             rgbd_miou = get_scores_for_model(
                 model=args.model,
                 config=config_location,
@@ -203,6 +205,8 @@ if __name__ == "__main__":
                 dataset=os.path.join(args.dataset_dir, other_dataset_name),
                 x_channels=3,
                 x_e_channels=1,
+                ignore_background=True,
+                device=device,
             )
 
             remove_background(
@@ -219,12 +223,10 @@ if __name__ == "__main__":
             # Move background_removed folder to RGB
             # Train model on RGB with background removed
 
-            # Move RGB folder to RGB_original
             rgb_folder = os.path.join(args.dataset_dir, other_dataset_name, "RGB")
             rgb_original_folder = os.path.join(args.dataset_dir, other_dataset_name, "RGB_original")
             os.rename(rgb_folder, rgb_original_folder)
 
-            # Move background_removed folder to RGB
             background_removed_folder = os.path.join(args.dataset_dir, other_dataset_name, "background_removed")
             os.rename(background_removed_folder, rgb_folder)
 
@@ -236,6 +238,8 @@ if __name__ == "__main__":
                 dataset=os.path.join(args.dataset_dir, other_dataset_name),
                 x_channels=3,
                 x_e_channels=3,
+                ignore_background=True,
+                device=device,
             )
 
             # Move RGB_original folder to RGB
@@ -244,9 +248,7 @@ if __name__ == "__main__":
 
             with open(log_file, "a") as f:
                 f.write(
-                    f"Dataset: {other_dataset_name}\n"
-                    f"RGB-D mIoU: {rgbd_miou}\n"
-                    f"RGB background removed mIoU: {rgb_background_removed_miou}\n\n"
+                    f"Dataset: {other_dataset_name} RGB-D mIoU: {rgbd_miou} RGB background removed mIoU: {rgb_background_removed_miou}\n"
                 )
 
 

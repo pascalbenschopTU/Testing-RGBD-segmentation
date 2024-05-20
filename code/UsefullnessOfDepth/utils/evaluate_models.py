@@ -155,8 +155,11 @@ def get_scores_for_model(
         background_only=False,
         x_channels=-1,
         x_e_channels=-1, 
-        results_file="results.txt"
+        results_file="results.txt",
+        device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+        create_confusion_matrix=True,
     ):
+    print("device: ", device)
     module_name = config
     if ".py" in module_name:
         module_name = module_name.replace(".py", "")
@@ -209,8 +212,6 @@ def get_scores_for_model(
     # print('load model: ', model_weights)
     logger.info(f'load model {config.backbone} weights : {model_weights}')
     model.load_state_dict(weight, strict=False)
-    
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     # Get #parameters of model
@@ -223,7 +224,6 @@ def get_scores_for_model(
     
     with torch.no_grad():
         model.eval()
-        device = torch.device('cuda')
         metric, mious, iou_stds = evaluate(model, val_loader,config, device, bin_size=bin_size)
         if ignore_background:
             metric.confusion_matrix = metric.confusion_matrix[1:, 1:]
@@ -238,14 +238,6 @@ def get_scores_for_model(
         fwiou = metric.Frequency_Weighted_Intersection_over_Union()
         print('miou, macc, mf1, pixel_acc_class, fwiou: ',miou, macc, mf1, pixel_acc_class, fwiou)
         
-        
-        # plt.figure(figsize=(20, 20))
-        # sns.heatmap(metric.confusion_matrix, annot=True, fmt=".3f", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
-        # plt.xlabel("Predicted")
-        # plt.ylabel("True")
-        # plt.title("Confusion Matrix, mIoU: {:.2f}".format(miou))
-        # plt.tight_layout()
-        # plt.show()
         confusion_matrix = metric.confusion_matrix
         
         # Normalize confusion matrix
@@ -258,18 +250,19 @@ def get_scores_for_model(
         if len(class_names) < 5:
             default_figsize = (5, 5)
 
-        # Plot confusion matrix
-        plt.figure(figsize=default_figsize)
-        sns.heatmap(confusion_matrix, annot=True, fmt=".3f", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
-        plt.xlabel("Predicted")
-        plt.ylabel("True")
-        plt.title("Confusion Matrix, mIoU: {:.2f}".format(miou))
-        plt.tight_layout()
-        result_file_name = os.path.join(model_weights_dir, 'confusion_matrix.png')
-        if os.path.exists(result_file_name):
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            result_file_name = os.path.join(model_weights_dir, f'confusion_matrix_{timestamp}.png')
-        plt.savefig(result_file_name)
+        if create_confusion_matrix:
+            # Plot confusion matrix
+            plt.figure(figsize=default_figsize)
+            sns.heatmap(confusion_matrix, annot=True, fmt=".3f", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
+            plt.xlabel("Predicted")
+            plt.ylabel("True")
+            plt.title("Confusion Matrix, mIoU: {:.2f}".format(miou))
+            plt.tight_layout()
+            result_file_name = os.path.join(model_weights_dir, 'confusion_matrix.png')
+            if os.path.exists(result_file_name):
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                result_file_name = os.path.join(model_weights_dir, f'confusion_matrix_{timestamp}.png')
+            plt.savefig(result_file_name)
 
 
         with open(model_results_file, 'a') as f:
