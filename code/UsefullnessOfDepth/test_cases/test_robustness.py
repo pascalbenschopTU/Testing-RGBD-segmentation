@@ -68,6 +68,25 @@ if __name__ == "__main__":
         default=60,
         help="The number of epochs to use for hyperparameter tuning",
     )
+    parser.add_argument(
+        "-rgbdw", "--rgbd_weights",
+        type=str,
+        default=None,
+        help="The weights for the RGB-D model",
+    )
+    parser.add_argument(
+        "-rgbw", "--rgb_weights",
+        type=str,
+        default=None,
+        help="The weights for the RGB model",
+    )
+    parser.add_argument(
+        "-exp", "--experiments",
+        nargs="+",
+        type=str,
+        default=["saturation", "brightness", "hue"],
+        help="The experiments to run on the dataset",
+    )
     args = parser.parse_args()
     date_time = time.strftime("%Y%m%d_%H%M%S")
 
@@ -110,72 +129,80 @@ if __name__ == "__main__":
 
     with open(log_file, "a") as f:
         f.write(f"\nModel trained on dataset: {dataset_name}\n\n")
+    if args.rgbd_weights is not None:
+        rgbd_model_weights_file = args.rgbd_weights
+    else:
+        rgbd_best_miou, config = train_model(
+            config_location,
+            checkpoint_dir=args.checkpoint_dir,
+            dataset_classes=args.dataset_classes,
+            num_hyperparameter_samples=args.num_hyperparameter_samples,
+            num_hyperparameter_epochs=args.num_hyperparameter_epochs,
+            num_epochs=args.num_epochs,
+            x_channels=3,
+            x_e_channels=1,
+            dataset_name=dataset_name,
+        )
 
-    rgbd_best_miou, config = train_model(
-        config_location,
-        checkpoint_dir=args.checkpoint_dir,
-        dataset_classes=args.dataset_classes,
-        num_hyperparameter_samples=args.num_hyperparameter_samples,
-        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
-        num_epochs=args.num_epochs,
-        x_channels=3,
-        x_e_channels=1,
-        dataset_name=dataset_name,
-    )
-
-    rgbd_model_weights_file = None
-    rgbd_model_weights_dir = config.log_dir
-    for root, dirs, files in os.walk(rgbd_model_weights_dir):
-        for file in files:
-            if file.startswith("epoch"):
-                rgbd_model_weights_file = os.path.join(root, file)
-
-
-    with open(log_file, "a") as f:
-        f.write(f"RGB-D mIoU: {rgbd_best_miou}\nModel best weights: {rgbd_model_weights_file}\n")
-
-    rgb_best_miou, _ = train_model(
-        config_location,
-        checkpoint_dir=args.checkpoint_dir,
-        dataset_classes=args.dataset_classes,
-        num_hyperparameter_samples=args.num_hyperparameter_samples,
-        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
-        num_epochs=args.num_epochs,
-        x_channels=3,
-        x_e_channels=3,
-        dataset_name=dataset_name,
-    )
-
-    rgb_model_weights_file = None
-    rgb_model_weights_dir = config.log_dir
-    for root, dirs, files in os.walk(rgb_model_weights_dir):
-        for file in files:
-            if file.startswith("epoch"):
-                rgb_model_weights_file = os.path.join(root, file)
+        rgbd_model_weights_file = None
+        rgbd_model_weights_dir = config.log_dir
+        for root, dirs, files in os.walk(rgbd_model_weights_dir):
+            for file in files:
+                if file.startswith("epoch"):
+                    rgbd_model_weights_file = os.path.join(root, file)
 
 
-    with open(log_file, "a") as f:
-        f.write(f"RGB mIoU: {rgb_best_miou}\nModel best weights: {rgb_model_weights_file}\n")
+        with open(log_file, "a") as f:
+            f.write(f"RGB-D mIoU: {rgbd_best_miou}\nModel best weights: {rgbd_model_weights_file}\n")
+
+    if args.rgb_weights is not None:
+        rgb_model_weights_file = args.rgb_weights
+    else:
+        rgb_best_miou, _ = train_model(
+            config_location,
+            checkpoint_dir=args.checkpoint_dir,
+            dataset_classes=args.dataset_classes,
+            num_hyperparameter_samples=args.num_hyperparameter_samples,
+            num_hyperparameter_epochs=args.num_hyperparameter_epochs,
+            num_epochs=args.num_epochs,
+            x_channels=3,
+            x_e_channels=3,
+            dataset_name=dataset_name,
+        )
+
+        rgb_model_weights_file = None
+        rgb_model_weights_dir = config.log_dir
+        for root, dirs, files in os.walk(rgb_model_weights_dir):
+            for file in files:
+                if file.startswith("epoch"):
+                    rgb_model_weights_file = os.path.join(root, file)
+
+
+        with open(log_file, "a") as f:
+            f.write(f"RGB mIoU: {rgb_best_miou}\nModel best weights: {rgb_model_weights_file}\n")
 
     experiments = ["saturation", "brightness", "hue"]
     property_values_train = [
         (0.7, 1.3),
         (0.7, 1.3),
         (-0.1, 0.1),
-
     ]
+
     property_values_test = [
         np.linspace(0.001, 2.0, 11),
         np.linspace(0.001, 2.0, 11),
         np.linspace(-0.5, 0.5, 11),
     ]
 
-    for i, experiment in enumerate(experiments):
+    experiment_indexes = [i for i in range(len(experiments)) if experiments[i] in args.experiments]
+    print(f"The experiments to run are: {[experiments[i] for i in experiment_indexes]}")
+
+    for i in experiment_indexes:
         adapt_property(
             origin_directory_path=RGB_original_folder,
             destination_directory_path=RGB_folder,
             property_value=property_values_train[i],
-            property_name=experiment,
+            property_name=experiments[i],
             split="train",
         )
 
@@ -183,9 +210,11 @@ if __name__ == "__main__":
             origin_directory_path=RGB_original_folder,
             destination_directory_path=RGB_folder,
             property_value=property_values_train[i],
-            property_name=experiment,
+            property_name=experiments[i],
             split="test",
         )
+        print(f"Running experiment {experiments[i]}, property values: {property_values_train[i]}")
+
         rgbd_variation_best_miou, config = train_model(
             config_location,
             checkpoint_dir=args.checkpoint_dir,
@@ -206,7 +235,7 @@ if __name__ == "__main__":
                     rgbd_variation_model_weights_file = os.path.join(root, file)
 
         with open(log_file, "a") as f:
-            f.write(f"RGB-D variation {experiment} mIoU: {rgbd_variation_best_miou}\nModel best weights: {rgbd_variation_model_weights_file}\n")
+            f.write(f"RGB-D variation {experiments[i]} mIoU: {rgbd_variation_best_miou}\nModel best weights: {rgbd_variation_model_weights_file}\n")
 
         rgb_variation_best_miou, config = train_model(
             config_location,
@@ -228,7 +257,7 @@ if __name__ == "__main__":
                     rgb_variation_model_weights_file = os.path.join(root, file)
 
         with open(log_file, "a") as f:
-            f.write(f"RGB variation {experiment} mIoU: {rgb_variation_best_miou}\nModel best weights: {rgb_variation_model_weights_file}\n\n")
+            f.write(f"RGB variation {experiments[i]} mIoU: {rgb_variation_best_miou}\nModel best weights: {rgb_variation_model_weights_file}\n\n")
         
         property_values = property_values_test[i]
         for property_value in property_values:
@@ -236,7 +265,7 @@ if __name__ == "__main__":
                 origin_directory_path=RGB_original_folder,
                 destination_directory_path=RGB_folder,
                 property_value=property_value,
-                property_name=experiment,
+                property_name=experiments[i],
                 split="test",
             )
 
@@ -286,7 +315,7 @@ if __name__ == "__main__":
 
             with open(log_file, "a") as f:
                 f.write(
-                    f"Property: {experiment} Property value: {property_value}\n"
+                    f"Property: {experiments[i]} Property value: {property_value}\n"
                     f"RGB-D mIoU: {miou_values_rgbd} RGB-D variation mIoU: {miou_values_rgbd_variation}\n"
                     f"RGB mIoU: {miou_values_rgb} RGB variation mIoU: {miou_values_rgb_variation}\n"
                 )

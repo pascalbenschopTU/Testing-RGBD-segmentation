@@ -185,8 +185,6 @@ def get_scores_for_model(
         if model == "segformer":
             config.backbone = "segformer"
 
-    if model_weights is None or not ".pth" in model_weights or not config.backbone in model_weights:
-        model_weights = set_model_weights_if_not_specified(config, args)
 
     model_weights_dir = os.path.dirname(model_weights)
     model_results_file = os.path.join(model_weights_dir, results_file)
@@ -207,11 +205,15 @@ def get_scores_for_model(
         model = DeepLab(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
     if config.backbone == "segformer":
         model = SegFormer(cfg=config, criterion=criterion)
-
-    weight = torch.load(model_weights)['model']
-    # print('load model: ', model_weights)
-    logger.info(f'load model {config.backbone} weights : {model_weights}')
-    model.load_state_dict(weight, strict=False)
+    
+    try:
+        weight = torch.load(model_weights)['model']
+        # print('load model: ', model_weights)
+        logger.info(f'load model {config.backbone} weights : {model_weights}')
+        model.load_state_dict(weight, strict=False)
+    except Exception as e:
+        logger.error(f"Invalid model weights file: {model_weights}. Error: {e}")
+    
     model.to(device)
 
     # Get #parameters of model

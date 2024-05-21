@@ -16,6 +16,109 @@ from utils.evaluate_models import get_scores_for_model
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+def train_models(args, dataset_name, config_location, log_file):
+    with open(log_file, "a") as f:
+        f.write(f"\nModel trained on dataset: {dataset_name}\n\n")
+
+    rgbd_best_miou, config = train_model(
+        config_location,
+        checkpoint_dir=args.checkpoint_dir,
+        dataset_classes=args.dataset_classes,
+        num_hyperparameter_samples=args.num_hyperparameter_samples,
+        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
+        num_epochs=args.num_epochs,
+        x_channels=3,
+        x_e_channels=1,
+        dataset_name=dataset_name,
+    )
+
+    rgbd_model_weights_dir = config.log_dir
+    for root, dirs, files in os.walk(rgbd_model_weights_dir):
+        for file in files:
+            if file.startswith("epoch"):
+                rgbd_model_weights_file = os.path.join(root, file)
+
+    with open(log_file, "a") as f:
+        f.write(f"RGB-D mIoU: {rgbd_best_miou}\nModel best weights: {rgbd_model_weights_file}\n")
+
+
+    depth_best_miou, config = train_model(
+        config_location,
+        checkpoint_dir=args.checkpoint_dir,
+        dataset_classes=args.dataset_classes,
+        num_hyperparameter_samples=args.num_hyperparameter_samples,
+        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
+        num_epochs=args.num_epochs,
+        x_channels=1,
+        x_e_channels=1,
+        dataset_name=dataset_name,
+    )
+
+    # Get the last run folder in the checkpoint directory
+
+    depth_model_weights_dir = config.log_dir
+    for root, dirs, files in os.walk(depth_model_weights_dir):
+        for file in files:
+            if file.startswith("epoch"):
+                depth_model_weights_file = os.path.join(root, file)
+
+    with open(log_file, "a") as f:
+        f.write(f"Depth mIoU: {depth_best_miou}\nModel best weights: {depth_model_weights_file}\n")
+    
+    
+    remove_background(
+        model_weights_dir=depth_model_weights_file,
+        dataset_dir=os.path.join(args.dataset_dir, dataset_name),
+        config=config,
+        new_folder="background_removed",
+        x_channels=1,
+        x_e_channels=1,
+        test_only=False,
+    )
+
+    # Move RGB folder to RGB_original
+    # Move background_removed folder to RGB
+    # Train model on RGB with background removed
+
+    # Move RGB folder to RGB_original
+    rgb_folder = os.path.join(args.dataset_dir, dataset_name, "RGB")
+    rgb_original_folder = os.path.join(args.dataset_dir, dataset_name, "RGB_original")
+    os.rename(rgb_folder, rgb_original_folder)
+
+    # Move background_removed folder to RGB
+    background_removed_folder = os.path.join(args.dataset_dir, dataset_name, "background_removed")
+    os.rename(background_removed_folder, rgb_folder)
+
+    # Train model on RGB with background removed
+    rgb_background_removed_best_miou, config = train_model(
+        config_location,
+        checkpoint_dir=args.checkpoint_dir,
+        dataset_classes=args.dataset_classes,
+        num_hyperparameter_samples=args.num_hyperparameter_samples,
+        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
+        num_epochs=args.num_epochs,
+        x_channels=3,
+        x_e_channels=3,
+        dataset_name=dataset_name,
+    )
+
+    rgb_background_removed_weights_dir = config.log_dir
+    for root, dirs, files in os.walk(rgb_background_removed_weights_dir):
+        for file in files:
+            if file.startswith("epoch"):
+                rgb_background_removed_weights_file = os.path.join(root, file)
+
+    with open(log_file, "a") as f:
+        f.write(f"RGB background removed mIoU: {rgb_background_removed_best_miou}\nModel best weights: {rgb_background_removed_weights_file}\n\n")
+
+    # Move RGB_original folder to RGB
+    os.rename(rgb_folder, background_removed_folder)
+    os.rename(rgb_original_folder, rgb_folder)
+
+
+    return rgbd_model_weights_file, depth_model_weights_file, rgb_background_removed_weights_file
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -66,6 +169,12 @@ if __name__ == "__main__":
         default=60,
         help="The number of epochs to use for hyperparameter tuning",
     )
+    parser.add_argument(
+        "-t", "--test_only",
+        type=bool,
+        default=False,
+        help="Whether to only test the model",
+    )
     args = parser.parse_args()
     date_time = time.strftime("%Y%m%d_%H%M%S")
 
@@ -95,109 +204,46 @@ if __name__ == "__main__":
 
     for dataset_name in os.listdir(args.dataset_dir):
         # Update the config with the dataset_name details
-
-        with open(log_file, "a") as f:
-            f.write(f"\nModel trained on dataset: {dataset_name}\n\n")
-
-        rgbd_best_miou, config = train_model(
-            config_location,
-            checkpoint_dir=args.checkpoint_dir,
-            dataset_classes=args.dataset_classes,
-            num_hyperparameter_samples=args.num_hyperparameter_samples,
-            num_hyperparameter_epochs=args.num_hyperparameter_epochs,
-            num_epochs=args.num_epochs,
-            x_channels=3,
-            x_e_channels=1,
-            dataset_name=dataset_name,
-        )
-
         rgbd_model_weights_file = None
-        rgbd_model_weights_dir = config.log_dir
-        for root, dirs, files in os.walk(rgbd_model_weights_dir):
-            for file in files:
-                if file.startswith("epoch"):
-                    rgbd_model_weights_file = os.path.join(root, file)
-
-        with open(log_file, "a") as f:
-            f.write(f"RGB-D mIoU: {rgbd_best_miou}\nModel best weights: {rgbd_model_weights_file}\n")
-
-
-        depth_best_miou, config = train_model(
-            config_location,
-            checkpoint_dir=args.checkpoint_dir,
-            dataset_classes=args.dataset_classes,
-            num_hyperparameter_samples=args.num_hyperparameter_samples,
-            num_hyperparameter_epochs=args.num_hyperparameter_epochs,
-            num_epochs=args.num_epochs,
-            x_channels=1,
-            x_e_channels=1,
-            dataset_name=dataset_name,
-        )
-
-        # Get the last run folder in the checkpoint directory
-
         depth_model_weights_file = None
-        depth_model_weights_dir = config.log_dir
-        for root, dirs, files in os.walk(depth_model_weights_dir):
-            for file in files:
-                if file.startswith("epoch"):
-                    depth_model_weights_file = os.path.join(root, file)
-
-        with open(log_file, "a") as f:
-            f.write(f"Depth mIoU: {depth_best_miou}\nModel best weights: {depth_model_weights_file}\n")
-        
-        
-        remove_background(
-            model_weights_dir=depth_model_weights_file,
-            dataset_dir=os.path.join(args.dataset_dir, dataset_name),
-            config=config,
-            new_folder="background_removed",
-            x_channels=1,
-            x_e_channels=1,
-            test_only=False,
-        )
-
-        # Move RGB folder to RGB_original
-        # Move background_removed folder to RGB
-        # Train model on RGB with background removed
-
-        # Move RGB folder to RGB_original
-        rgb_folder = os.path.join(args.dataset_dir, dataset_name, "RGB")
-        rgb_original_folder = os.path.join(args.dataset_dir, dataset_name, "RGB_original")
-        os.rename(rgb_folder, rgb_original_folder)
-
-        # Move background_removed folder to RGB
-        background_removed_folder = os.path.join(args.dataset_dir, dataset_name, "background_removed")
-        os.rename(background_removed_folder, rgb_folder)
-
-        # Train model on RGB with background removed
-        rgb_background_removed_best_miou, config = train_model(
-            config_location,
-            checkpoint_dir=args.checkpoint_dir,
-            dataset_classes=args.dataset_classes,
-            num_hyperparameter_samples=args.num_hyperparameter_samples,
-            num_hyperparameter_epochs=args.num_hyperparameter_epochs,
-            num_epochs=args.num_epochs,
-            x_channels=3,
-            x_e_channels=3,
-            dataset_name=dataset_name,
-        )
-
         rgb_background_removed_weights_file = None
-        rgb_background_removed_weights_dir = config.log_dir
-        for root, dirs, files in os.walk(rgb_background_removed_weights_dir):
-            for file in files:
-                if file.startswith("epoch"):
-                    rgb_background_removed_weights_file = os.path.join(root, file)
+        # If there is a directory containing the dataset name in the checkpoint dir
+        # Check if there are three directories starting with run
+        # If there are, skip training the model
+        # If there are not, train the model
+        for dir in os.listdir(args.checkpoint_dir):
+            if dataset_name in dir:
+                run_dirs = [f for f in os.listdir(os.path.join(args.checkpoint_dir, dir)) if f.startswith("run")]
+                if len(run_dirs) == 3:
+                    for filename in os.listdir(os.path.join(args.checkpoint_dir, dir, run_dirs[0])):
+                        if filename.startswith("epoch"):
+                            rgbd_model_weights_file = os.path.join(args.checkpoint_dir, dir, run_dirs[0], filename)
 
-        with open(log_file, "a") as f:
-            f.write(f"RGB background removed mIoU: {rgb_background_removed_best_miou}\nModel best weights: {rgb_background_removed_weights_file}\n\n")
+                    for filename in os.listdir(os.path.join(args.checkpoint_dir, dir, run_dirs[1])):
+                        if filename.startswith("epoch"):
+                            depth_model_weights_file = os.path.join(args.checkpoint_dir, dir, run_dirs[1], filename)
+                    
+                    for filename in os.listdir(os.path.join(args.checkpoint_dir, dir, run_dirs[2])):
+                        if filename.startswith("epoch"):
+                            rgb_background_removed_weights_file = os.path.join(args.checkpoint_dir, dir, run_dirs[2], filename)
 
-        # Move RGB_original folder to RGB
-        os.rename(rgb_folder, background_removed_folder)
-        os.rename(rgb_original_folder, rgb_folder)
+                    print(f"Model already trained on dataset: {dataset_name}")
+                    print(f"Weights for RGB-D model: {rgbd_model_weights_file} for Depth model: {depth_model_weights_file} for RGB background removed model: {rgb_background_removed_weights_file}")
+
+        if args.test_only:
+            if rgbd_model_weights_file is None:
+                continue
+            if depth_model_weights_file is None:
+                continue
+            if rgb_background_removed_weights_file is None:
+                continue
+        else:
+            rgbd_model_weights_file, depth_model_weights_file, rgb_background_removed_weights_file = train_models(args, dataset_name, config_location, log_file)
 
         for other_dataset_name in os.listdir(args.dataset_dir):
+            if not "F_textures_flat_far" in other_dataset_name:
+                continue
+
             rgbd_miou = get_scores_for_model(
                 model=args.model,
                 config=config_location,
@@ -250,8 +296,3 @@ if __name__ == "__main__":
                 f.write(
                     f"Dataset: {other_dataset_name} RGB-D mIoU: {rgbd_miou} RGB background removed mIoU: {rgb_background_removed_miou}\n"
                 )
-
-
-
-
-
