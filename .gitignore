@@ -7,6 +7,7 @@ checkpoints/
 config/
 pytorch-deeplab-xception/
 SynthDet/
+SynthDet_Pascal/
 
 *.meta
-
+log.txt

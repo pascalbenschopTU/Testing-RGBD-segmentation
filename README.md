@@ -15,6 +15,8 @@ Activate conda environment:
 Step 1
 ```
 conda env create -f environment.yaml
+
+conda env update --file environment2.yml
 ```
 If an error occurs with something like: `An error occurred while installing package 'defaults::xz-5.4.5-h8cc25b3_0'.
 Rolling back transaction: done`

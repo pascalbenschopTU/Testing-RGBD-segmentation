@@ -270,7 +270,7 @@ class AdaptiveDatasetCreator:
                 self.convert_and_save_RGB(rgb_data, f"test_{batch_idx}")
                 self.convert_and_save_label(label, f"test_{batch_idx}")
                 self.convert_and_save_depth(depth_data, f"test_{batch_idx}")
-                self.convert_and_save_grayscale(rgb_data, f"test_{batch_idx}")
+                # self.convert_and_save_grayscale(rgb_data, f"test_{batch_idx}")
                 if self.dataset_depth_tests:
                     self.convert_and_save_depth_compressed(depth_data, f"test_{batch_idx}")
                     self.convert_and_save_depth_kinect_noise(depth_data, f"test_{batch_idx}")
@@ -290,7 +290,7 @@ class AdaptiveDatasetCreator:
         test_dataset = torch.utils.data.Subset(dataset, list(range(train_size, train_size + test_size)))
 
         # Define the number of workers for parallel data loading
-        num_workers = 16
+        num_workers = 1
         print(f"Using {num_workers} workers for data loading")
 
         # Define data loaders
@@ -302,7 +302,7 @@ class AdaptiveDatasetCreator:
             self.convert_and_save_RGB(rgb_data, f"train_{batch_idx}")
             self.convert_and_save_label(label, f"train_{batch_idx}")
             self.convert_and_save_depth(depth_data, f"train_{batch_idx}")
-            self.convert_and_save_grayscale(rgb_data, f"train_{batch_idx}")
+            # self.convert_and_save_grayscale(rgb_data, f"train_{batch_idx}")
             if self.dataset_depth_tests:
                 self.convert_and_save_depth_compressed(depth_data, f"train_{batch_idx}")
                 self.convert_and_save_depth_kinect_noise(depth_data, f"train_{batch_idx}")
@@ -320,7 +320,7 @@ class AdaptiveDatasetCreator:
             self.convert_and_save_RGB(rgb_data, f"test_{batch_idx}")
             self.convert_and_save_label(label, f"test_{batch_idx}")
             self.convert_and_save_depth(depth_data, f"test_{batch_idx}")
-            self.convert_and_save_grayscale(rgb_data, f"test_{batch_idx}")
+            # self.convert_and_save_grayscale(rgb_data, f"test_{batch_idx}")
             if self.dataset_depth_tests:
                 self.convert_and_save_depth_compressed(depth_data, f"test_{batch_idx}")
                 self.convert_and_save_depth_kinect_noise(depth_data, f"test_{batch_idx}")

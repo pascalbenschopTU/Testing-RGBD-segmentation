@@ -9,7 +9,7 @@ set config_path=local_configs.SUNRGBD.SUNRGBD_DFormer_Tiny
 cd DFormer
 
 @REM Train the model
-python utils\train_clean.py --config=%config_path% --gpus 1 --checkpoint_dir %checkpoint_dir% --dataset_type %dataset_type% --num_hyperparameter_epochs 0 --x_channels=3 --x_e_channels=1
+@REM python utils\train_clean.py --config=%config_path% --gpus 1 --checkpoint_dir %checkpoint_dir% --dataset_type %dataset_type% --num_hyperparameter_epochs 0 --x_channels=3 --x_e_channels=1
 
 REM Get the last directory starting with "run" from the given path
 for /f "delims=" %%d in ('dir /b /ad /on %checkpoint_dir%\SUNRGBD_DFormer-Tiny\run*') do (
@@ -26,11 +26,10 @@ echo Last filename: %last_filename%
 
 set rgb_depth_model_weights=%checkpoint_dir%\SUNRGBD_DFormer-Tiny\%last_directory%\%last_filename%
 
-python utils\evaluate_models.py --config=%config_path% --model_weights %rgb_depth_model_weights%
+@REM python utils\evaluate_models.py --config=%config_path% --model_weights %rgb_depth_model_weights%
 
-move "%dataset_path%\Depth" "%dataset_path%\Depth_original"
-xcopy "%dataset_path%\RGB" "%dataset_path%\Depth" /E /I /Y
-
+@REM move "%dataset_path%\Depth" "%dataset_path%\Depth_original"
+@REM xcopy "%dataset_path%\RGB" "%dataset_path%\Depth" /E /I /Y
 
 @REM Train the model
 python utils\train_clean.py --config=%config_path% --gpus 1 --checkpoint_dir %checkpoint_dir% --dataset_type %dataset_type% --num_hyperparameter_epochs 0 --x_channels=3 --x_e_channels=3
