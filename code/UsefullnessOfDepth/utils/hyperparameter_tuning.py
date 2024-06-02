@@ -1,15 +1,19 @@
 from functools import partial
 import os
 import sys
-
-sys.path.append('../UsefullnessOfDepth')
-
 from torch.utils.data import DataLoader
+from torch.utils.data import Subset
 import argparse
 import importlib
 import torch
 import torch.nn as nn
-from utils.dataloader.dataloader import get_train_loader,get_val_loader, ValPre
+from tensorboardX import SummaryWriter
+import random
+import numpy as np
+from functools import partial
+
+sys.path.append('../UsefullnessOfDepth')
+
 # Model
 from model_DFormer.builder import EncoderDecoder as segmodel
 from models_CMX.builder import EncoderDecoder as cmxmodel
@@ -17,14 +21,11 @@ from model_pytorch_deeplab_xception.deeplab import DeepLab
 from models_segformer import SegFormer
 
 # Dataset
+from utils.dataloader.dataloader import get_train_loader,get_val_loader, ValPre
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.init_func import init_weight, group_weight
 from utils.lr_policy import WarmUpPolyLR
 from utils.metrics_new import Metrics
-from tensorboardX import SummaryWriter
-import random
-import numpy as np
-from functools import partial
 
 # Ray imports for hyperparameter tuning
 import ray
@@ -109,16 +110,17 @@ def set_seed(seed):
     # avoiding nondeterministic algorithms (see https://pytorch.org/docs/stable/notes/randomness.html)
     torch.use_deterministic_algorithms(True, warn_only=True)
 
-def train_dformer(config, original_config, train_dataset, num_epochs=5):
-    hyperparameters = config.copy()
-    
-    config = original_config
+def ray_callback(miou, loss, epoch):
+    train.report({"miou": miou, "loss": loss, "epoch": epoch})
+
+def train_dformer(hyperparameters, config, train_dataset, num_epochs=5, train_callback=None):
     # Set hyperparemeters
     config.lr = hyperparameters["lr"]
     config.lr_power = hyperparameters["lr_power"]
     config.momentum = hyperparameters["momentum"]
     config.weight_decay = hyperparameters["weight_decay"]
     config.batch_size = hyperparameters["batch_size"]
+    config.optimizer = hyperparameters["optimizer"]
     config.nepochs = num_epochs
     config.warm_up_epoch = 1
 
@@ -134,98 +136,25 @@ def train_dformer(config, original_config, train_dataset, num_epochs=5):
     )
     train_size = len(train_subset)
 
+    config.num_train_imgs = train_size
+    config.checkpoint_step = 1
+    config.checkpoint_start_epoch = 0
+
     train_loader = DataLoader(train_subset, batch_size=config.batch_size, shuffle=True)
     val_loader = DataLoader(validate_subset, batch_size=config.batch_size, shuffle=False)
     print('train size: ',len(train_loader), 'val size: ',len(val_loader), "batch size: ", config.batch_size)
 
-    # Dont ignore the background class
-    criterion = nn.CrossEntropyLoss(reduction='mean')
-    BatchNorm2d = nn.BatchNorm2d
-    
-    if "DFormer" in config.backbone:
-        model = segmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
-    if config.backbone == "mit_b2":
-        model = cmxmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
-    if config.backbone == "xception":
-        model = DeepLab(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
-    if config.backbone == "segformer":
-        model = SegFormer(cfg=config, criterion=criterion)
-    
-    base_lr = config.lr
-    
-    params_list = []
-    params_list = group_weight(params_list, model, BatchNorm2d, base_lr)
-    
-    if hyperparameters["optimizer"] == 'AdamW':
-        optimizer = torch.optim.AdamW(params_list, lr=base_lr, betas=(0.9, 0.999), weight_decay=config.weight_decay)
-    elif hyperparameters["optimizer"] == 'SGDM':
-        optimizer = torch.optim.SGD(params_list, lr=base_lr, momentum=config.momentum, weight_decay=config.weight_decay)
-    else:
-        raise NotImplementedError
+    kwargs = {
+        "is_tuning": True,
+        "train_loader": train_loader,
+        "val_loader": val_loader,
+        "ray_callback": ray_callback,
+    }
 
-    config.niters_per_epoch = train_size // config.batch_size + 1
-    if train_size % config.batch_size == 0:
-        config.niters_per_epoch = train_size // config.batch_size
-    total_iteration = config.nepochs * config.niters_per_epoch
-    lr_policy = WarmUpPolyLR(base_lr, config.lr_power, total_iteration, config.niters_per_epoch * config.warm_up_epoch)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print('device: ',device)
-    model.to(device)
-
-    optimizer.zero_grad()
-    best_miou=0.0
-    
-    for epoch in range(1, config.nepochs+1):
-        model.train()
-        bar_format = '{desc}[{elapsed}<{remaining},{rate_fmt}]'
-        pbar = range(config.niters_per_epoch)
-        dataloader = iter(train_loader)
-
-        sum_loss = 0
-        i=0
-        for idx in pbar:
-            minibatch = next(dataloader)
-            imgs = minibatch['data']
-            gts = minibatch['label']
-            modal_xs = minibatch['modal_x']
-            if len(imgs) < config.batch_size:
-                continue
-
-            imgs = imgs.cuda(non_blocking=True)
-            gts = gts.cuda(non_blocking=True)
-            modal_xs = modal_xs.cuda(non_blocking=True)
-
-            # loss = model(imgs, modal_xs, gts)
-            output = model(imgs, modal_xs)
-            loss = criterion(output, gts.long())
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            current_idx = (epoch- 1) * config.niters_per_epoch + idx 
-            lr = lr_policy.get_lr(current_idx)
-
-            for i in range(len(optimizer.param_groups)):
-                optimizer.param_groups[i]['lr'] = lr
-
-            sum_loss += loss
-
-        with torch.no_grad():
-            model.eval()
-            device = torch.device('cuda')
-            metric, loss = evaluate(model, val_loader, config, device, criterion=criterion)
-            ious, miou = metric.compute_iou()
-            acc, macc = metric.compute_pixel_acc()
-            f1, mf1 = metric.compute_f1()
-
-            if miou > best_miou:
-                best_miou = miou
-            
-        print('macc: ', macc, 'mf1: ', mf1, 'miou: ',miou,'best: ',best_miou)
-
-        train.report({"miou": miou, "loss": loss})
+    if train_callback is None:
+        print("No train callback provided, exiting")
+        return
+    train_callback(config, **kwargs)
 
 
 def shorten_trial_dirname_creator(trial, experiment_name="empty"):
@@ -233,39 +162,41 @@ def shorten_trial_dirname_creator(trial, experiment_name="empty"):
     short_trial_name = f"{experiment_name}_{trial.trial_id}"
     return short_trial_name
 
-def update_config_paths(original_config):
-    # Make all paths in original_config absolute
-    original_config.dataset_path = os.path.abspath(original_config.dataset_path)
-    original_config.rgb_root_folder = os.path.abspath(original_config.rgb_root_folder)
-    original_config.gt_root_folder = os.path.abspath(original_config.gt_root_folder)
-    original_config.x_root_folder = os.path.abspath(original_config.x_root_folder)
-    original_config.log_dir = os.path.abspath(original_config.log_dir)
-    original_config.tb_dir = os.path.abspath(original_config.tb_dir)
-    original_config.checkpoint_dir = os.path.abspath(original_config.checkpoint_dir)
-    original_config.train_source = os.path.abspath(original_config.train_source)
-    original_config.eval_source = os.path.abspath(original_config.eval_source)
+def update_config_paths(config):
+    # Make all paths in config absolute
+    config.dataset_path = os.path.abspath(config.dataset_path)
+    config.rgb_root_folder = os.path.abspath(config.rgb_root_folder)
+    config.gt_root_folder = os.path.abspath(config.gt_root_folder)
+    config.x_root_folder = os.path.abspath(config.x_root_folder)
+    config.log_dir = os.path.abspath(config.log_dir)
+    config.tb_dir = os.path.abspath(config.tb_dir)
+    config.checkpoint_dir = os.path.abspath(config.checkpoint_dir)
+    config.train_source = os.path.abspath(config.train_source)
+    config.eval_source = os.path.abspath(config.eval_source)
+    if config.pretrained_model is not None:
+        config.pretrained_model = os.path.abspath(config.pretrained_model)
     
-    return original_config
+    return config
 
-def tune_hyperparameters(original_config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, gpus_per_trial=1):
-    original_config = update_config_paths(original_config)
+def tune_hyperparameters(config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, gpus_per_trial=1, train_callback=None):
+    config = update_config_paths(config)
 
-    experiment_name = f"{original_config.dataset_name}_{original_config.backbone}"
+    experiment_name = f"{config.dataset_name}_{config.backbone}"
 
     param_space = {
-        "lr": tune.loguniform(1e-5, 1e-1),
-        "batch_size": tune.choice([4, 8, 16]),
-        "lr_power": tune.uniform(0.85, 1.0),
-        "momentum": tune.uniform(0.85, 0.99),
-        "weight_decay": tune.loguniform(1e-4, 1e-1),
+        "lr": tune.loguniform(1e-5, 1e-3),
+        "batch_size": tune.choice([8, 16]),
+        "lr_power": tune.uniform(0.8, 1.0),
+        "momentum": tune.uniform(0.9, 0.99),
+        "weight_decay": tune.loguniform(1e-4, 1e-2),
         "optimizer": tune.choice(["AdamW", "SGDM"]),
     }
 
-    large_models = ["mit_b2", "xception"]
-    if original_config.backbone in large_models:
+    large_models = ["mit_b2", "xception", "mit_b3"]
+    if config.backbone in large_models:
         param_space["batch_size"] = tune.choice([4, 8])
     extra_large_models = ["DFormer-Large"]
-    if original_config.backbone in extra_large_models:
+    if config.backbone in extra_large_models:
         param_space["batch_size"] = tune.choice([4])
     
     algorithm = OptunaSearch(
@@ -282,7 +213,7 @@ def tune_hyperparameters(original_config, num_samples=20, max_num_epochs=5, cpus
         reduction_factor=2,
     )
 
-    train_dataset = get_dataset(original_config)
+    train_dataset = get_dataset(config)
     import torch
     import torch._dynamo
     torch.set_float32_matmul_precision("high")
@@ -292,9 +223,10 @@ def tune_hyperparameters(original_config, num_samples=20, max_num_epochs=5, cpus
         tune.with_resources(
             tune.with_parameters(
                 train_dformer, 
-                original_config=original_config,
+                config=config,
                 train_dataset=train_dataset,
-                num_epochs=max_num_epochs,                
+                num_epochs=max_num_epochs,
+                train_callback=train_callback,                
             ),
             resources={"cpu": cpus_per_trial, "gpu": gpus_per_trial},
         ),
@@ -338,6 +270,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config_module = importlib.import_module(args.config)
-    original_config = config_module.config
+    config = config_module.config
 
-    final_config = tune_hyperparameters(original_config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, gpus_per_trial=1, experiment_name="empty")
+    final_config = tune_hyperparameters(config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, gpus_per_trial=1, experiment_name="empty")

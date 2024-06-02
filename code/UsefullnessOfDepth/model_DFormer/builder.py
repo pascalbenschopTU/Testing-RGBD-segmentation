@@ -186,7 +186,7 @@ class EncoderDecoder(nn.Module):
         return out
     
 
-class EncoderDecoderMultiTask:
+class EncoderDecoderMultiTask(nn.Module):
     def __init__(self, cfg=None, criterion=nn.CrossEntropyLoss(reduction='mean', ignore_index=255), norm_layer=nn.BatchNorm2d, single_GPU=True):
         super(EncoderDecoderMultiTask, self).__init__()
         self.norm_layer = norm_layer
@@ -229,7 +229,15 @@ class EncoderDecoderMultiTask:
             print(cfg.num_classes)
             from .decoders.ham_head import LightHamHead as DecoderHead
             self.decode_head = DecoderHead(in_channels=self.channels[1:], num_classes=cfg.num_classes, in_index=[1,2,3],norm_cfg=norm_cfg, channels=cfg.decoder_embed_dim)
-            self.aux_head = DecoderHead(in_channels=self.channels[1:], num_classes=cfg.num_classes, in_index=[1,2,3],norm_cfg=norm_cfg, channels=cfg.decoder_embed_dim)
+            from .decoders.fcnhead import FCNHead
+            self.aux_index = 2
+            self.aux_rate = 0.4
+            self.aux_head = FCNHead(
+                in_channels=self.channels[self.aux_index],
+                channels=64,
+                num_classes=2,
+                norm_layer=norm_layer
+            )
             
         elif cfg.decoder == 'UPernet':
             logger.info('Using Upernet Decoder')
@@ -287,15 +295,16 @@ class EncoderDecoderMultiTask:
         out = self.decode_head.forward(x[0])
         out = F.interpolate(out, size=orisize[-2:], mode='bilinear', align_corners=False)
         if self.aux_head:
-            aux_fm = self.aux_head(x[0])
+            aux_fm = self.aux_head(x[0][self.aux_index])
             aux_fm = F.interpolate(aux_fm, size=orisize[-2:], mode='bilinear', align_corners=False)
             return out, aux_fm
         return out
 
     def forward(self, rgb, modal_x=None, label=None):
-        # print('builder',rgb.shape,modal_x.shape)
-        out_seg, out_depth = self.encode_decode(rgb, modal_x)
-
-        return out_seg, out_depth
+        if self.aux_head:
+            out_seg, out_aux = self.encode_decode(rgb, modal_x)
+            return out_seg, out_aux
+        else:
+            return out_seg
 
     

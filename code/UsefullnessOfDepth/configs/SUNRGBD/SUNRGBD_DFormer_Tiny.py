@@ -54,7 +54,7 @@ C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'
 
 """Train Config"""
-C.lr = 0.001 #8e-5
+C.lr = 1e-3 #8e-5
 C.lr_power = 0.9
 C.momentum = 0.9
 C.weight_decay = 0.01
@@ -88,25 +88,15 @@ def add_path(path):
         sys.path.insert(0, path)
 add_path(osp.join(C.root_dir))
 
-C.log_dir = osp.abspath('checkpoints/' + C.dataset_name + '_' + C.backbone)
+C.checkpoint_dir = 'checkpoints_Sun'
+C.log_dir = osp.abspath(osp.join(C.checkpoint_dir, C.dataset_name + '_' + C.backbone))
 C.tb_dir = osp.abspath(osp.join(C.log_dir, "tb"))
 C.log_dir_link = C.log_dir
-C.checkpoint_dir = osp.abspath(osp.join(C.log_dir, "checkpoint"))#'/mnt/sda/repos/2023_RGBX/pretrained/'#osp.abspath(osp.join(C.log_dir, "checkpoint"))
-
-exp_time = time.strftime('%Y_%m_%d_%H_%M_%S', time.localtime())
-C.log_file = C.log_dir + '/log_' + exp_time + '.log'
-C.link_log_file = C.log_file + '/log_last.log'
-C.val_log_file = C.log_dir + '/val_' + exp_time + '.log'
-C.link_val_log_file = C.log_dir + '/val_last.log'
 
 if __name__ == '__main__':
     print(config.nepochs)
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-tb', '--tensorboard', default=False, action='store_true')
-    args = parser.parse_args()
+    
+C.x_channels = 3
+C.x_e_channels = 3
 
-    if args.tensorboard:
-        open_tensorboard()
-C.x_channels = 1
-C.x_e_channels = 1
+C.date_time = '20240519-193925'

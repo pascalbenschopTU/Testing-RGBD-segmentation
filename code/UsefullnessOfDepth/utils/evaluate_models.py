@@ -18,6 +18,7 @@ from model_DFormer.builder import EncoderDecoder as segmodel
 from models_CMX.builder import EncoderDecoder as cmxmodel
 from model_pytorch_deeplab_xception.deeplab import DeepLab
 from models_segformer import SegFormer
+from model_TokenFusion.segformer import WeTr
 
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.dataloader.dataloader import get_val_loader, get_train_loader
@@ -184,6 +185,8 @@ def get_scores_for_model(
             config.backbone = "xception"
         if model == "segformer":
             config.backbone = "segformer"
+        if model == "TokenFusion":
+            config.backbone = "mit_b1"
 
 
     model_weights_dir = os.path.dirname(model_weights)
@@ -205,6 +208,8 @@ def get_scores_for_model(
         model = DeepLab(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
     if config.backbone == "segformer":
         model = SegFormer(cfg=config, criterion=criterion)
+    if config.backbone == "mit_b1":
+        model = WeTr(cfg=config)
     
     try:
         weight = torch.load(model_weights)['model']
@@ -226,9 +231,17 @@ def get_scores_for_model(
     
     with torch.no_grad():
         model.eval()
-        metric, mious, iou_stds = evaluate(model, val_loader,config, device, bin_size=bin_size)
+        metric, mious, iou_stds, rgb_metric, depth_metric = evaluate(
+            model=model,
+            dataloader=val_loader,
+            config=config,
+            device=device,
+            bin_size=bin_size,
+            ignore_background=ignore_background
+        )
+            
         if ignore_background:
-            metric.confusion_matrix = metric.confusion_matrix[1:, 1:]
+            # metric.confusion_matrix = metric.confusion_matrix[1:, 1:]
             class_names = class_names[1:]
         # miou = metric.Mean_Intersection_over_Union()
         ious, iou_std, miou = metric.compute_iou()
@@ -266,23 +279,38 @@ def get_scores_for_model(
                 result_file_name = os.path.join(model_weights_dir, f'confusion_matrix_{timestamp}.png')
             plt.savefig(result_file_name)
 
-
         with open(model_results_file, 'a') as f:
             f.write(f'miou: {miou:.2f}, macc: {macc:.2f}, mf1: {mf1:.2f}, mious: [{", ".join([f"{iou:.2f}" for iou in mious])}], iou_stds: [{", ".join([f"{iou_std:.2f}" for iou_std in iou_stds])}]\n')
             f.write(f'model parameters: {num_params}\n')
+
+        if rgb_metric is not None and depth_metric is not None:
+            rgb_mious, rgb_iou_stds, rgb_miou = rgb_metric.compute_iou()
+            depth_mious, depth_iou_stds, depth_miou = depth_metric.compute_iou()
+            print('rgb_miou, depth_miou: ', rgb_miou, depth_miou)
+            with open(model_results_file, 'a') as f:
+                f.write(f'rgb_miou: {rgb_miou:.2f}, depth_miou: {depth_miou:.2f}\n')
+            
+            miou = [miou, rgb_miou, depth_miou]
 
         return miou
 
             
             
 @torch.no_grad()
-def evaluate(model, dataloader, config, device, bin_size=1):
+def evaluate(model, dataloader, config, device, bin_size=1, ignore_background=False):
     model.eval()
     n_classes = config.num_classes
     # metrics = Metrics(n_classes, config.background - 100, device)
     evaluator = Evaluator(n_classes, ignore_index=config.background)
     bin_evaluator = Evaluator(n_classes, ignore_index=config.background)
     jaccard = JaccardIndex(task='multiclass', num_classes=n_classes).to(device)
+
+    rgb_evaluator = None
+    depth_evaluator = None
+
+    if isinstance(model, WeTr):
+        rgb_evaluator = Evaluator(n_classes, ignore_index=config.background)
+        depth_evaluator = Evaluator(n_classes, ignore_index=config.background)
 
     mious = []
     iou_stds = []
@@ -292,48 +320,84 @@ def evaluate(model, dataloader, config, device, bin_size=1):
         labels = minibatch["label"][0]
         modal_xs = minibatch["modal_x"][0]
 
-        images = [images.to(device), modal_xs.to(device)]
-        labels = labels.to(device)
-        preds = model(images[0], images[1]).softmax(dim=1)
-
         if len(labels.shape) == 2:
             labels = labels.unsqueeze(0)
+
+        images = [images.to(device), modal_xs.to(device)]
+        labels = labels.to(device)
+        preds = model(images[0], images[1])
+        if isinstance(model, WeTr):
+            preds, masks = preds[0], preds[1]
+            preds_rgb = preds[0].softmax(dim=1)
+            preds_depth = preds[1].softmax(dim=1)
+            rgb_evaluator.add_batch(labels.cpu().numpy(), preds_rgb.argmax(1).cpu().numpy())
+            depth_evaluator.add_batch(labels.cpu().numpy(), preds_depth.argmax(1).cpu().numpy())
+
+            preds = preds[2] # Ensemble
+
+        preds = preds.softmax(dim=1)
 
         # metrics.update(preds, labels)
         evaluator.add_batch(labels.cpu().numpy(), preds.argmax(1).cpu().numpy())
         bin_evaluator.add_batch(labels.cpu().numpy(), preds.argmax(1).cpu().numpy())
         
         if i > 0 and (i % bin_size == 0 or i == len(dataloader) - 1):
-            # miou = bin_evaluator.Mean_Intersection_over_Union()
-            bin_evaluator.confusion_matrix = bin_evaluator.confusion_matrix[1:, 1:]
+            if ignore_background:
+                bin_evaluator.confusion_matrix = np.delete(bin_evaluator.confusion_matrix, config.background, axis=0)
+                bin_evaluator.confusion_matrix = np.delete(bin_evaluator.confusion_matrix, config.background, axis=1)
             ious, iou_std, miou = bin_evaluator.compute_iou()
             mious.append(miou)
             iou_stds.append(iou_std)
             bin_evaluator.reset()
+
+    if ignore_background:
+        evaluator.confusion_matrix = np.delete(evaluator.confusion_matrix, config.background, axis=0)
+        evaluator.confusion_matrix = np.delete(evaluator.confusion_matrix, config.background, axis=1)
         
-    return evaluator, mious, iou_stds
+    return evaluator, mious, iou_stds, rgb_evaluator, depth_evaluator
 
 @torch.no_grad()
-def evaluate_torch(model, dataloader, config, device):
+def evaluate_torch(model, dataloader, config, device, ignore_class=-1):
     print("Evaluating...")
     model.eval()
     n_classes = config.num_classes
-    metrics = Metrics(n_classes, config.background, device)
+    metrics = [Metrics(n_classes, ignore_class, device)]
+    if isinstance(model, WeTr):
+        metrics = [Metrics(n_classes, ignore_class, device) for _ in range(model.num_parallel + 1)]
+
+    use_aux = config.get('use_aux', False)
+
+    # Additional metrics for auxiliary branch, if present
+    if use_aux:
+        aux_metrics = Metrics(2, ignore_class, device)
+        metrics.append(aux_metrics)
 
     for minibatch in tqdm(dataloader, dynamic_ncols=True):
         images = minibatch["data"][0]
         labels = minibatch["label"][0]
         modal_xs = minibatch["modal_x"][0]
-        # print(images.shape,labels.shape)
-        images = [images.to(device), modal_xs.to(device)]
-        labels = labels.to(device)
-        preds = model(images[0], images[1]).softmax(dim=1)
         if len(labels.shape) == 2:
             labels = labels.unsqueeze(0)
-        # print(preds.shape,labels.shape)
-        metrics.update(preds, labels)
-
         
+        images = [images.to(device), modal_xs.to(device)]
+        labels = labels.to(device)
+        
+        outputs = model(images[0], images[1])
+        if use_aux:
+            preds, aux_preds = outputs[0], outputs[1]
+            binary_labels = (labels > 0).long()
+            metrics[1].update(aux_preds.softmax(dim=1), binary_labels)
+        else:
+            preds = outputs
+
+        if isinstance(preds, list):
+            preds, masks = preds[0], preds[1]
+            metrics[0].update(preds[2].softmax(dim=1), labels) # Ensemble
+            metrics[1].update(preds[0].softmax(dim=1), labels) # RGB
+            metrics[2].update(preds[1].softmax(dim=1), labels) # Depth
+        else:
+            metrics[0].update(preds.softmax(dim=1), labels)
+
     return metrics
 
 
@@ -349,6 +413,9 @@ if __name__ == '__main__':
     argparser.add_argument('-ib', '--ignore_background', action='store_true', help='Ignore background class')
     argparser.add_argument('-bo', '--background_only', action='store_true', help='Evaluate only background class')
 
+    argparser.add_argument('-xc', '--x_channels', help='Number of channels in X', default=-1, type=int)
+    argparser.add_argument('-xec', '--x_e_channels', help='Number of channels in X_e', default=-1, type=int)
+
     args = argparser.parse_args()
 
     get_scores_for_model(
@@ -358,5 +425,7 @@ if __name__ == '__main__':
         dataset=args.dataset,
         bin_size=args.bin_size,
         ignore_background=args.ignore_background,
-        background_only=args.background_only
+        background_only=args.background_only,
+        x_channels=args.x_channels,
+        x_e_channels=args.x_e_channels
     )

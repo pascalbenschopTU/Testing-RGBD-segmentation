@@ -8,6 +8,7 @@ from tqdm import tqdm
 import importlib
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision.utils import make_grid
 from tensorboardX import SummaryWriter
 import numpy as np
@@ -16,9 +17,11 @@ sys.path.append('../UsefullnessOfDepth')
 
 # Model
 from model_DFormer.builder import EncoderDecoder as segmodel
+from model_DFormer.builder import EncoderDecoderMultiTask as segmodel_multitask
 from models_CMX.builder import EncoderDecoder as cmxmodel
 from model_pytorch_deeplab_xception.deeplab import DeepLab
 from models_segformer import SegFormer
+from model_TokenFusion.segformer import WeTr
 
 # Utils
 from utils.dataloader.dataloader import get_train_loader,get_val_loader
@@ -28,6 +31,14 @@ from utils.lr_policy import WarmUpPolyLR
 from utils.evaluate_models import evaluate_torch
 from utils.hyperparameter_tuning import tune_hyperparameters
 from utils.update_config import update_config
+
+class DummyTB:
+    def add_scalar(self, *args, **kwargs):
+        pass
+
+class DummySummary:
+    def visualize_image(self, *args, **kwargs):
+        pass
 
 class TensorboardSummary(object):
     def __init__(self, directory):
@@ -86,18 +97,6 @@ class TensorboardSummary(object):
                                                     config=config), 3, normalize=False, value_range=(0, 255))
         writer.add_image('Groundtruth_label', grid_image, global_step)
 
-def setup_dirs(config):
-    config.log_dir = config.log_dir+'/run_'+time.strftime('%Y%m%d-%H%M%S', time.localtime()).replace(' ','_')
-    if not os.path.isdir(config.log_dir):
-        os.makedirs(config.log_dir)
-    tb_dir = config.tb_dir + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))
-    if not os.path.isdir(tb_dir):
-        os.makedirs(tb_dir)
-    tb_summary = TensorboardSummary(tb_dir)
-    tb = tb_summary.create_summary()
-
-    return tb, tb_summary
-
 def set_seed(seed):
     # seed init.
     random.seed(seed)
@@ -121,50 +120,66 @@ def set_seed(seed):
     # avoiding nondeterministic algorithms (see https://pytorch.org/docs/stable/notes/randomness.html)
     torch.use_deterministic_algorithms(True, warn_only=True)
 
-def train_model_from_config(config):
-    import torch
-    torch.set_float32_matmul_precision("high")
-    import torch._dynamo
-
-    torch._dynamo.config.suppress_errors = True
+def train_model_from_config(config, **kwargs):
+    # import torch
+    # torch.set_float32_matmul_precision("high")
+    # import torch._dynamo
+    # torch._dynamo.config.suppress_errors = True
+    print(f"Using kwargs: {kwargs}")
 
     # set_seed(config.seed)
 
-    tb, tb_summary = setup_dirs(config)
+    is_tuning = kwargs.get('is_tuning', False)
+    use_tb = config.get('use_tb', False)
+    use_aux = config.get('use_aux', False)
 
-    train_loader_args = {
-        # 'random_noise_rgb': True,
-        # 'random_noise_rgb_prob': 0.1,
-        # 'random_noise_rgb_amount': 1.0,
-        # 'random_black': True,
-        # 'random_black_prob': 0.1,
-        # 'random_mirror': True,
-        # 'random_crop_and_scale': True,
-        # 'random_crop': True,
-    }
 
-    train_loader, _ = get_train_loader(None, RGBXDataset, config, **train_loader_args)
+    tb, tb_summary = DummyTB(), DummySummary()
+    if not is_tuning:
+        config.log_dir = config.log_dir+'/run_'+time.strftime('%Y%m%d-%H%M%S', time.localtime()).replace(' ','_')
+        os.makedirs(config.log_dir, exist_ok=True)
+        
+        if use_tb:
+            tb_dir = os.path.join(config.tb_dir, time.strftime("%b%d_%H-%M", time.localtime()))
+            os.makedirs(tb_dir, exist_ok=True)
+            tb_summary = TensorboardSummary(tb_dir)
+            tb = tb_summary.create_summary()
+
+    train_loader, _ = get_train_loader(None, RGBXDataset, config)
     val_loader, _ = get_val_loader(None, RGBXDataset, config, 1)
+
+    # Special loaders for hyperparameter tuning
+    if kwargs.get('train_loader', None) is not None:
+        train_loader = kwargs.get('train_loader')
+    if kwargs.get('val_loader', None) is not None:
+        val_loader = kwargs.get('val_loader')
 
     # Dont ignore the background class
     criterion = nn.CrossEntropyLoss(reduction='mean')
-    if train_loader_args.get('random_crop_and_scale', False):
-        criterion = nn.CrossEntropyLoss(reduction='none', ignore_index=config.background)
     BatchNorm2d = nn.BatchNorm2d
     
+    base_lr = config.lr
+    params_list = []
+
     if "DFormer" in config.backbone:
-        model = segmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
+        if use_aux:
+            model = segmodel_multitask(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
+        else:
+            model = segmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
+        params_list = group_weight(params_list, model, BatchNorm2d, base_lr)
     if config.backbone == "mit_b2":
         model = cmxmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
+        params_list = group_weight(params_list, model, BatchNorm2d, base_lr)
     if config.backbone == "xception":
         model = DeepLab(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
+        params_list = group_weight(params_list, model, BatchNorm2d, base_lr)
     if config.backbone == "segformer":
         model = SegFormer(cfg=config, criterion=criterion)
+        params_list = group_weight(params_list, model, BatchNorm2d, base_lr)
+    if config.backbone == "mit_b1":
+        model = WeTr(cfg=config)
+        params_list = model.get_param_groups(base_lr, config.weight_decay)
     
-    base_lr = config.lr
-    
-    params_list = []
-    params_list = group_weight(params_list, model, BatchNorm2d, base_lr)
     
     if config.optimizer == 'AdamW':
         optimizer = torch.optim.AdamW(params_list, lr=base_lr, betas=(0.9, 0.999), weight_decay=config.weight_decay)
@@ -215,13 +230,28 @@ def train_model_from_config(config):
             gts = gts.cuda(non_blocking=True)
             modal_xs = modal_xs.cuda(non_blocking=True)
     
-            # loss = model(imgs, modal_xs, gts)
             output = model(imgs, modal_xs)
-            if train_loader_args.get('random_crop_and_scale', False):
-                loss = criterion(output, gts.long())[gts.long() != config.background].mean()
+            if use_aux:
+                foreground_mask = gts != config.background
+                label = (foreground_mask > 0).long()
+                loss = criterion(output[0], gts.long()) + config.aux_rate * criterion(output[1], label)
+                output = output[0]
             else:
-                loss = criterion(output, gts.long())
+                if isinstance(model, WeTr) and isinstance(output, list):  # Output of TokenFusion
+                    output, masks = output
+                    loss = 0
+                    for out in output:
+                        soft_output = F.log_softmax(out, dim=1)
+                        loss += criterion(soft_output, gts)
+                else:
+                    loss = criterion(output, gts.long())
             
+            if 'masks' in locals() and masks is not None and config.lamda > 0:
+                L1_loss = 0
+                for mask in masks:
+                    L1_loss += sum([torch.abs(m).sum().cuda() for m in mask])
+                loss += config.lamda * L1_loss
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -235,7 +265,15 @@ def train_model_from_config(config):
             sum_loss += loss.item()
 
             if (epoch % config.checkpoint_step == 0 and epoch > int(config.checkpoint_start_epoch) or epoch == 1) and idx == 0:
-                tb_summary.visualize_image(tb, imgs, modal_xs, gts, model(imgs, modal_xs), epoch, config=config)
+                tb_summary.visualize_image(
+                    writer=tb,
+                    images=imgs,
+                    depth=modal_xs,
+                    target=gts,
+                    output=output,
+                    global_step=epoch,
+                    config=config
+                )
 
             print_str = 'Epoch {}/{}'.format(epoch, config.nepochs) \
                     + ' Iter {}/{}:'.format(idx + 1, config.niters_per_epoch) \
@@ -254,26 +292,44 @@ def train_model_from_config(config):
             with torch.no_grad():
                 model.eval()
                 device = torch.device('cuda')
-                metric = evaluate_torch(model, val_loader, config, device)
-                ious, miou = metric.compute_iou()
-                acc, macc = metric.compute_pixel_acc()
-                f1, mf1 = metric.compute_f1()
+                metrics = evaluate_torch(model, val_loader, config, device, ignore_class=config.background)
+                ious, miou = metrics[0].compute_iou()
+                acc, macc = metrics[0].compute_pixel_acc()
+                f1, mf1 = metrics[0].compute_f1()
+                mious = [miou]
+                print('macc: ', macc, 'mf1: ', mf1, 'miou: ',miou)
+                if use_aux:
+                    ious_aux, miou_aux = metrics[1].compute_iou()
+                    mious = [miou, miou_aux]
+                    print('aux_miou: ', miou_aux)
+                if isinstance(model, WeTr):
+                    _, rgb_miou = metrics[1].compute_iou()
+                    _, depth_miou = metrics[2].compute_iou()
+                    mious = [miou, rgb_miou, depth_miou]
+                    print('rgb_miou: ', rgb_miou, 'depth_miou: ', depth_miou)
 
-                if miou > best_miou:
-                    best_miou = miou
-                    print('saving model...')
-                    save_checkpoint(model, optimizer, epoch, current_idx, os.path.join(config.log_dir, f"epoch_{epoch}_miou_{miou}.pth"))
-                
-                print('macc: ', macc, 'mf1: ', mf1, 'miou: ',miou,'best: ',best_miou)
-                result_line = f'acc: {acc}, macc: {macc}, f1: {f1}, mf1: {mf1}, ious: {ious}, miou: {miou}\n'
-                with open(config.log_dir + '/results.txt', 'a') as file:
-                    file.write(result_line)
+                miou = max(mious)
+
+                if not is_tuning:
+                    if miou > best_miou:
+                        best_miou = miou
+                        print('saving model...')
+                        save_checkpoint(model, optimizer, epoch, current_idx, os.path.join(config.log_dir, f"epoch_{epoch}_miou_{miou}.pth"))
+                    
+                    result_line = f'acc: {acc}, macc: {macc}, f1: {f1}, mf1: {mf1}, ious: {ious}, mious: {mious}\n'
+                    with open(config.log_dir + '/results.txt', 'a') as file:
+                        file.write(result_line)
                 
                 tb.add_scalar('val/macc', macc, epoch)
                 tb.add_scalar('val/mf1', mf1, epoch)
                 tb.add_scalar('val/miou', miou, epoch)
 
-                del metric, ious, acc, macc, f1, mf1
+                del metrics, ious, acc, macc, f1, mf1
+
+            ray_callback = kwargs.get('ray_callback', None)
+            if ray_callback is not None:
+                # Call the ray callback with miou and loss
+                ray_callback(miou, sum_loss / len(pbar), epoch)
 
     return best_miou
 
@@ -335,7 +391,8 @@ def run_hyperparameters(config_location, file_path, num_samples, num_hyperparame
         num_samples=num_samples, 
         max_num_epochs=num_hyperparameter_epochs, 
         cpus_per_trial=8, 
-        gpus_per_trial=1
+        gpus_per_trial=1,
+        train_callback=train_model_from_config
     )
     
     # Write best hyperparameters to file
@@ -366,7 +423,8 @@ def train_model(config_location: str,
                 num_epochs: int=60, 
                 x_channels: int=3, 
                 x_e_channels: int=1,
-                dataset_name: str=None, 
+                dataset_name: str=None,
+                max_train_images: int=1e6, 
                 gpus: int=1,
     ):
 
@@ -389,6 +447,8 @@ def train_model(config_location: str,
         config.backbone = "xception"
     if model == "segformer":
         config.backbone = "segformer"
+    if model == "TokenFusion":
+        config.backbone = "mit_b1"
 
     config = update_config(
         config_location, 
@@ -396,6 +456,7 @@ def train_model(config_location: str,
             "backbone": config.backbone,
             "decoder": config.decoder,
             "checkpoint_dir": checkpoint_dir,
+            "num_train_imgs": max(1, min(config.num_train_imgs, max_train_images)),
         }
     )
 
@@ -493,8 +554,15 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    config_location = args.config
+    if ".py" in config_location:
+        config_location = config_location.replace(".py", "")
+        config_location = config_location.replace("\\", ".")
+        while config_location.startswith("."):
+            config_location = config_location[1:]
+
     best_miou, config = train_model(
-        config_location=args.config,
+        config_location=config_location,
         checkpoint_dir=args.checkpoint_dir,
         model=args.model,
         dataset_classes=args.dataset_classes,
