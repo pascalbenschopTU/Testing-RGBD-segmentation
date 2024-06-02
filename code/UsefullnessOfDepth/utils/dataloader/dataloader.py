@@ -61,6 +61,20 @@ class TrainPre(object):
             if np.random.uniform() < random_black_prob:
                 rgb = np.zeros_like(rgb)
 
+        color_jitter = self.kwargs.get('random_color_jitter', False)
+        min_color_jitter = self.kwargs.get('min_color_jitter', 0.7)
+        max_color_jitter = self.kwargs.get('max_color_jitter', 1.3)
+        if color_jitter:
+            rgb = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+            rgb = rgb.astype(np.float32)
+            rgb[:, :, 0] *= np.random.uniform(min_color_jitter, max_color_jitter)
+            rgb[:, :, 0] = rgb[:, :, 0] % 180
+            rgb[:, :, 1] *= np.random.uniform(min_color_jitter, max_color_jitter)
+            rgb[:, :, 2] *= np.random.uniform(min_color_jitter, max_color_jitter)
+            rgb = np.clip(rgb, 0, 255)
+            rgb = rgb.astype(np.uint8)
+            rgb = cv2.cvtColor(rgb, cv2.COLOR_HSV2RGB)
+
         random_noise_rgb = self.kwargs.get('random_noise_rgb', False)
         random_noise_rgb_prob = self.kwargs.get('random_noise_rgb_prob', 0.5)
         random_noise_rgb_max = self.kwargs.get('random_noise_rgb_amount', 0.1)
@@ -137,7 +151,7 @@ class ValPre(object):
         return rgb.transpose(2, 0, 1), gt, modal_x.transpose(2, 0, 1)
     
 
-def get_train_loader(engine, dataset, config, **kwargs):
+def get_train_loader(engine, dataset, config):
     data_setting = {'rgb_root': config.rgb_root_folder,
                     'rgb_format': config.rgb_format,
                     'gt_root': config.gt_root_folder,
@@ -151,10 +165,18 @@ def get_train_loader(engine, dataset, config, **kwargs):
                     'eval_source': config.eval_source,
                     'class_names': config.class_names}
     
+    train_loader_args = {
+        'random_black': config.get('random_black', False),
+        'random_mirror': config.get('random_mirror', False),
+        'random_crop_and_scale': config.get('random_crop_and_scale', False),
+        'random_crop': config.get('random_crop', False),
+        'random_color_jitter': config.get('random_color_jitter', False),
+    }
+    
     # train_preprocess = TrainPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config)
     # train_preprocess = ValPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config)
-    print("Using TrainPre with kwargs: ", kwargs)
-    train_preprocess = TrainPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config, **kwargs)
+    print("Using following augmentations: ", train_loader_args)
+    train_preprocess = TrainPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config, **train_loader_args)
 
     num_imgs = (config.num_train_imgs // config.batch_size + 1) * config.batch_size
     train_dataset = dataset(data_setting, "train", train_preprocess, num_imgs)

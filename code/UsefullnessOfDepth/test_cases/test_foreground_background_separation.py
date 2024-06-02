@@ -11,7 +11,7 @@ sys.path.append('../UsefullnessOfDepth')
 
 from utils.update_config import update_config
 from utils.train import train_model
-from utils.background_remover import remove_background
+from utils.image_prediction_pipeline import remove_background
 from utils.evaluate_models import get_scores_for_model
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -154,19 +154,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "-hs", "--num_hyperparameter_samples",
         type=int,
-        default=20,
+        default=15,
         help="The number of samples to use for hyperparameter tuning",
     )
     parser.add_argument(
         "-he", "--num_hyperparameter_epochs",
         type=int,
-        default=5,
+        default=3,
         help="The number of epochs to use for hyperparameter tuning",
     )
     parser.add_argument(
         "-e", "--num_epochs",
         type=int,
-        default=60,
+        default=40,
         help="The number of epochs to use for hyperparameter tuning",
     )
     parser.add_argument(
@@ -203,6 +203,11 @@ if __name__ == "__main__":
         f.write("Log file for foreground background separation\n\n")
 
     for dataset_name in os.listdir(args.dataset_dir):
+        dataset_train_file = os.path.join(args.dataset_dir, dataset_name, "train.txt")
+        # If the train.txt file is empty, skip the dataset
+        if not os.path.exists(dataset_train_file) or os.path.getsize(dataset_train_file) == 0:
+            continue
+
         # Update the config with the dataset_name details
         rgbd_model_weights_file = None
         depth_model_weights_file = None
@@ -231,19 +236,12 @@ if __name__ == "__main__":
                     print(f"Weights for RGB-D model: {rgbd_model_weights_file} for Depth model: {depth_model_weights_file} for RGB background removed model: {rgb_background_removed_weights_file}")
 
         if args.test_only:
-            if rgbd_model_weights_file is None:
-                continue
-            if depth_model_weights_file is None:
-                continue
-            if rgb_background_removed_weights_file is None:
+            if rgbd_model_weights_file is None or depth_model_weights_file is None or rgb_background_removed_weights_file is None:
                 continue
         else:
             rgbd_model_weights_file, depth_model_weights_file, rgb_background_removed_weights_file = train_models(args, dataset_name, config_location, log_file)
 
         for other_dataset_name in os.listdir(args.dataset_dir):
-            if not "F_textures_flat_far" in other_dataset_name:
-                continue
-
             rgbd_miou = get_scores_for_model(
                 model=args.model,
                 config=config_location,

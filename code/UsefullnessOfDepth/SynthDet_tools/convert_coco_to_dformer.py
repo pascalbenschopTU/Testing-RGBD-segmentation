@@ -95,10 +95,13 @@ class AdaptiveDatasetCreator:
         self.process_dataset(test_dataset, dataset_split="test")
 
 
-    def process_dataset(self, dataset, dataset_split="train"):
+    def process_dataset(self, dataset, dataset_split="train", single_process=True):
         progress_bar = tqdm(total=len(dataset), desc='Processing')
 
-        pool = multiprocessing.Pool()
+        if single_process:
+            pool = multiprocessing.Pool(processes=1)
+        else:
+            pool = multiprocessing.Pool()
 
         for idx, (rgb_data, depth_data, label) in enumerate(dataset):
             pool.apply(self.process_sequence, args=(idx, rgb_data, depth_data, label, dataset_split))

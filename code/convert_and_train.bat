@@ -6,9 +6,8 @@ set num_epochs=%4
 set hyperparam_epochs=%5
 @REM Choose model from [DFormer-Tiny, DFormer-Large, CMX-B2, DeepLab, segformer]
 set model=%6
+set checkpoint_dir=%7
 
-set use_edge_enhancement=false
-set checkpoint_dir=checkpoints
 @REM set checkpoint_dir=checkpoints_CMX
 set bin_size=1000
 
@@ -22,6 +21,10 @@ IF "%hyperparam_epochs%" == "" (
 
 IF "%model%" == "" (
     set model=DFormer-Tiny
+)
+
+IF "%checkpoint_dir%" == "" (
+    set checkpoint_dir=checkpoints
 )
 
 for /f "tokens=1,2 delims=-" %%a in ("%model%") do (
@@ -42,6 +45,12 @@ for /D %%d in ("%parent_dir%\*") do (
     if exist "%%d\SynthDet_%dataset_name%" (
         goto :skip_dataset_creation
     )
+    IF "%%~nxd" == "SynthDet_%dataset_name%" (
+        goto :skip_dataset_creation
+    )
+    IF "%%~nxd" == "%dataset_name%" (
+        goto :skip_dataset_creation
+    )
 )
 @REM IF EXIST "UsefullnessOfDepth\datasets\SynthDet_%dataset_name%" goto :skip_dataset_creation
 
@@ -57,10 +66,6 @@ move "..\..\data\SynthDet\coco" "..\..\data\SynthDet\coco_%dataset_name%"
 set dataset_path=..\..\data\SynthDet\coco_%dataset_name%
 
 python convert_coco_to_dformer.py %dataset_path% ..\datasets\SynthDet_%dataset_name% %dataset_type%
-
-IF %use_edge_enhancement% == true (
-    python add_edge_enhancement.py ..\datasets\SynthDet_%dataset_name%
-)
 
 @REM Remove the dataset from the data folder
 rmdir /s /q %dataset_path%
@@ -80,35 +85,35 @@ REM config = %config%
 
 @REM ####################################### RGB Depth #######################################
 
-@REM @REM Train the model
-@REM python utils\train.py ^
-@REM --config=%config% ^
-@REM --gpus 1 ^
-@REM --checkpoint_dir %checkpoint_dir% ^
-@REM --dataset_type %dataset_type% ^
-@REM --x_channels=3 ^
-@REM --x_e_channels=1 ^
-@REM --num_epochs %num_epochs% ^
-@REM --num_hyperparameter_epochs %hyperparam_epochs% ^
-@REM --model %model%
+@REM Train the model
+python utils\train.py ^
+--config=%config% ^
+--gpus 1 ^
+--checkpoint_dir %checkpoint_dir% ^
+--dataset_classes %dataset_type% ^
+--x_channels=3 ^
+--x_e_channels=1 ^
+--num_epochs %num_epochs% ^
+--num_hyperparameter_epochs %hyperparam_epochs% ^
+--model %model%
 
 
-@REM REM Get the last directory starting with "run" from the given path
-@REM for /f "delims=" %%d in ('dir /b /ad /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\run*') do (
-@REM     set "last_directory=%%d"
-@REM )
+REM Get the last directory starting with "run" from the given path
+for /f "delims=" %%d in ('dir /b /ad /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\run*') do (
+    set "last_directory=%%d"
+)
 
-@REM REM Get the last filename starting with "epoch" in the last directory
-@REM for /f "delims=" %%f in ('dir /b /a-d /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\epoch*') do (
-@REM     set "last_filename=%%f"
-@REM )
+REM Get the last filename starting with "epoch" in the last directory
+for /f "delims=" %%f in ('dir /b /a-d /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\epoch*') do (
+    set "last_filename=%%f"
+)
 
-@REM echo Last directory: %last_directory%
-@REM echo Last filename: %last_filename%
+echo Last directory: %last_directory%
+echo Last filename: %last_filename%
 
-@REM set rgb_depth_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
+set rgb_depth_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
 
-@REM python utils\evaluate_models.py --config=%config% --model_weights %rgb_depth_model_weights% --bin_size %bin_size% --model %model%
+python utils\evaluate_models.py --config=%config% --model_weights %rgb_depth_model_weights% --bin_size %bin_size% --model %model%
 
 @REM if model is DeepLab or DFormer_Large, skip the RGB only part
 IF "%model%" == "DFormer_Large" goto end
@@ -118,34 +123,34 @@ IF "%model%" == "segformer" goto end
 
 @REM ####################################### RGB ONLY #######################################
 
-@REM @REM Train the model
-@REM python utils\train.py ^
-@REM --config=%config% ^
-@REM --gpus 1 ^
-@REM --checkpoint_dir %checkpoint_dir% ^
-@REM --dataset_type %dataset_type% ^
-@REM --x_channels=3 ^
-@REM --x_e_channels=3 ^
-@REM --num_epochs %num_epochs% ^
-@REM --num_hyperparameter_epochs %hyperparam_epochs% ^
-@REM --model %model%
+@REM Train the model
+python utils\train.py ^
+--config=%config% ^
+--gpus 1 ^
+--checkpoint_dir %checkpoint_dir% ^
+--dataset_classes %dataset_type% ^
+--x_channels=3 ^
+--x_e_channels=3 ^
+--num_epochs %num_epochs% ^
+--num_hyperparameter_epochs %hyperparam_epochs% ^
+--model %model%
 
-@REM REM Get the last directory starting with "run" from the given path
-@REM for /f "delims=" %%d in ('dir /b /ad /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\run*') do (
-@REM     set "last_directory=%%d"
-@REM )
+REM Get the last directory starting with "run" from the given path
+for /f "delims=" %%d in ('dir /b /ad /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\run*') do (
+    set "last_directory=%%d"
+)
 
-@REM REM Get the last filename starting with "epoch" in the last directory
-@REM for /f "delims=" %%f in ('dir /b /a-d /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\epoch*') do (
-@REM     set "last_filename=%%f"
-@REM )
+REM Get the last filename starting with "epoch" in the last directory
+for /f "delims=" %%f in ('dir /b /a-d /on %checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\epoch*') do (
+    set "last_filename=%%f"
+)
 
-@REM echo Last directory: %last_directory%
-@REM echo Last filename: %last_filename%
+echo Last directory: %last_directory%
+echo Last filename: %last_filename%
 
-@REM set rgb_only_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
+set rgb_only_model_weights=%checkpoint_dir%\SynthDet_%dataset_name%_DFormer-Tiny\%last_directory%\%last_filename%
 
-@REM python utils\evaluate_models.py --config=%config% --model_weights %rgb_only_model_weights% --bin_size %bin_size% --model %model%
+python utils\evaluate_models.py --config=%config% --model_weights %rgb_only_model_weights% --bin_size %bin_size% --model %model%
 
 
 @REM @REM Create gen_results.txt and store the last command
@@ -159,7 +164,7 @@ python utils\train.py ^
 --config=%config% ^
 --gpus 1 ^
 --checkpoint_dir %checkpoint_dir% ^
---dataset_type %dataset_type% ^
+--dataset_classes %dataset_type% ^
 --x_channels=1 ^
 --x_e_channels=1 ^
 --num_epochs %num_epochs% ^

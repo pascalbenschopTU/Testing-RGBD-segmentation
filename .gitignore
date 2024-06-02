@@ -8,6 +8,9 @@ config/
 pytorch-deeplab-xception/
 SynthDet/
 SynthDet_Pascal/
+src/
 
 *.meta
 log.txt
+
+casus/
