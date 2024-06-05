@@ -16,6 +16,9 @@ from utils.evaluate_models import get_scores_for_model
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+x_channels_map = {"rgbd": 3, "rgbd_aux": 3, "rgb": 3, "depth": 1}
+x_e_channels_map = {"rgbd": 1, "rgbd_aux":1, "rgb": 3, "depth": 1}
+
 def train_model_on_dataset(args, dataset_name, config_location, x_channels, x_e_channels, max_train_images=500):
     best_miou, config = train_model(
         config_location,
@@ -69,123 +72,40 @@ def train_models(log_file, args, config_location, dataset_name, model_file_names
         with open(log_file, "a") as f:
             f.write(f"\nModel trained on dataset: {dataset_name}\n\n")
 
-    update_config(
-        config_location, 
-        {
-            "use_aux": True,
-            "aux_rate": 0.5,
-        }   
-    )
-    if "rgbd_aux" in models_to_train:
-        rgbd_aux_best_miou, rgbd_aux_model_weights_file = train_model_on_dataset(
-            args=args,
-            dataset_name=dataset_name,
-            config_location=config_location,
-            x_channels=3,
-            x_e_channels=1,
+    for model_name in models_to_train:
+        x_channels = x_channels_map.get(model_name, 3)
+        x_e_channels = x_e_channels_map.get(model_name, 1)
+        if "aux" in model_name:
+            update_config(
+                config_location, 
+                {
+                    "use_aux": True,
+                    "aux_rate": 0.5,
+                }   
+            )
+
+        best_miou, model_weights_file = train_model_on_dataset(
+            args,
+            dataset_name,
+            config_location,
+            x_channels=x_channels,
+            x_e_channels=x_e_channels,
             max_train_images=max_train_images,
         )
 
-        with open(log_file, "a") as f:
-            f.write(f"RGB-D aux mIoU: {rgbd_aux_best_miou}\nModel best weights: {rgbd_aux_model_weights_file}\n")
-
-        model_files["rgbd_aux"] = rgbd_aux_model_weights_file
-
-    # Train the models on the dataset with variations
-    update_config(
-        config_location, 
-        {
-            "use_aux": False,
-            "aux_rate": 0.0,
-        }   
-    )
-    config.use_aux = False
-    config.aux_rate = 0.0
-
-    if "rgbd" in models_to_train:
-        rgbd_best_miou, rgbd_model_weights_file = train_model_on_dataset(
-            args=args,
-            dataset_name=dataset_name,
-            config_location=config_location,
-            x_channels=3,
-            x_e_channels=1,
-            max_train_images=max_train_images,
-        )
+        model_files[model_name] = model_weights_file
 
         with open(log_file, "a") as f:
-            f.write(f"RGB-D mIoU: {rgbd_best_miou}\nModel best weights: {rgbd_model_weights_file}\n")
+            f.write(f"{model_name.upper()} mIoU: {best_miou}\nModel best weights: {model_weights_file}\n")
 
-        model_files["rgbd"] = rgbd_model_weights_file
-
-    if "rgb" in models_to_train:
-        rgb_best_miou, rgb_model_weights_file = train_model_on_dataset(
-            args=args,
-            dataset_name=dataset_name,
-            config_location=config_location,
-            x_channels=3,
-            x_e_channels=3,
-            max_train_images=max_train_images,
-        )
-
-        with open(log_file, "a") as f:
-            f.write(f"RGB mIoU: {rgb_best_miou}\nModel best weights: {rgb_model_weights_file}\n")
-
-        model_files["rgb"] = rgb_model_weights_file
-
-    if "depth" in models_to_train:
-        depth_best_miou, depth_model_weights_file = train_model_on_dataset(
-            args=args,
-            dataset_name=dataset_name,
-            config_location=config_location,
-            x_channels=1,
-            x_e_channels=1,
-            max_train_images=max_train_images,
-        )
-
-        with open(log_file, "a") as f:
-            f.write(f"Depth mIoU: {depth_best_miou}\nModel best weights: {depth_model_weights_file}\n")
-
-        model_files["depth"] = depth_model_weights_file
-
-    if "depth_preprocessed" in models_to_train:
-        make_predictions(
-            model_weights_dir=model_files["depth"],
-            dataset_dir=os.path.join(args.dataset_dir, dataset_name),
-            config=config,
-            new_folder="depth_preprocessed",
-            x_channels=1,
-            x_e_channels=1,
-            test_only=False,
-        )
-
-        # Move RGB folder to RGB_original
-        # Move depth_preprocessed folder to RGB
-        # Train model on RGB with background removed
-
-        depth_folder = os.path.join(args.dataset_dir, dataset_name, "Depth")
-        depth_original_folder = os.path.join(args.dataset_dir, dataset_name, "Depth_original")
-        os.rename(depth_folder, depth_original_folder)
-
-        depth_preprocessed_folder = os.path.join(args.dataset_dir, dataset_name, "depth_preprocessed")
-        os.rename(depth_preprocessed_folder, depth_folder)
-
-        # Train model on RGB with background removed
-        rgb_depth_preprocessed_best_miou, rgb_depth_preprocessed_model_weights_file = train_model_on_dataset(
-            args=args,
-            dataset_name=dataset_name,
-            config_location=config_location,
-            x_channels=3,
-            x_e_channels=1,
-            max_train_images=max_train_images,
-        )
-
-        with open(log_file, "a") as f:
-            f.write(f"RGB with Depth preprocessed mIoU: {rgb_depth_preprocessed_best_miou}\nModel best weights: {rgb_depth_preprocessed_model_weights_file}\n")
-
-        os.rename(depth_folder, depth_preprocessed_folder)
-        os.rename(depth_original_folder, depth_folder)
-
-        model_files["depth_preprocessed"] = rgb_depth_preprocessed_model_weights_file
+        if "aux" in model_name:
+            update_config(
+                config_location, 
+                {
+                    "use_aux": False,
+                    "aux_rate": 0.0,
+                }   
+            )
 
     return model_files
 
@@ -255,8 +175,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "-mti", "--max_train_images",
         type=int,
-        default=500,
+        default=200,
         help="The maximum number of images to use for training",
+    )
+    parser.add_argument(
+        "-mn", "--model_names",
+        type=str,
+        nargs="+",
+        default=["rgbd_aux", "rgbd"],
+        help="The names of the models to train",
     )
     args = parser.parse_args()
     date_time = time.strftime("%Y%m%d_%H%M%S")
@@ -303,8 +230,7 @@ if __name__ == "__main__":
         # If there are, skip training the model
         # If there are not, train the model
         # model_file_names = ["rgbd_aux", "rgbd", "rgb", "depth", "depth_preprocessed"]
-        model_file_names = ["rgbd_aux", "rgbd", "rgb"]
-        
+        model_file_names = args.model_names
         model_files = train_models(
             log_file=log_file,
             args=args,
@@ -316,9 +242,6 @@ if __name__ == "__main__":
 
         rgbd_aux_model_weights_file = model_files["rgbd_aux"]
         rgbd_model_weights_file = model_files["rgbd"]
-        rgb_model_weights_file = model_files["rgb"]
-        # depth_only_model_weights_file = model_files["depth"]
-        # depth_preprocessed_weights_file = model_files["depth_preprocessed"]
 
         # Train the models on the dataset with variations
         update_config(
@@ -330,97 +253,28 @@ if __name__ == "__main__":
         )
 
         for other_dataset_name in os.listdir(args.dataset_dir):
-            rgbd_aux_miou = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgbd_aux_model_weights_file,
-                dataset=os.path.join(args.dataset_dir, other_dataset_name),
-                ignore_background=True,
-                x_channels=3,
-                x_e_channels=1,
-                device=device,
-                create_confusion_matrix=False,
-               
-            )
-
-            rgbd_miou = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgbd_model_weights_file,
-                dataset=os.path.join(args.dataset_dir, other_dataset_name),
-                ignore_background=True,
-                x_channels=3,
-                x_e_channels=1,
-                device=device,
-                create_confusion_matrix=False,
-            )
-
-            rgb_miou = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgb_model_weights_file,
-                dataset=os.path.join(args.dataset_dir, other_dataset_name),
-                ignore_background=True,
-                x_channels=3,
-                x_e_channels=3,
-                device=device,
-                create_confusion_matrix=False,
-            )
-
-            # depth_miou = get_scores_for_model(
-            #     model=args.model,
-            #     config=config_location,
-            #     model_weights=depth_only_model_weights_file,
-            #     dataset=os.path.join(args.dataset_dir, other_dataset_name),
-            #     ignore_background=False,
-            #     x_channels=1,
-            #     x_e_channels=1,
-            #     device=device,
-            #     create_confusion_matrix=False,
-            # )
-
-            # make_predictions(
-            #     model_weights_dir=depth_only_model_weights_file,
-            #     dataset_dir=os.path.join(args.dataset_dir, other_dataset_name),
-            #     config=config,
-            #     new_folder="depth_preprocessed",
-            #     x_channels=1,
-            #     x_e_channels=1,
-            #     test_only=True,
-            # )
-        
-            # # Move RGB folder to RGB_original
-            # # Move depth_preprocessed folder to RGB
-            # # Train model on RGB with background removed
-
-            # depth_folder = os.path.join(args.dataset_dir, other_dataset_name, "Depth")
-            # depth_original_folder = os.path.join(args.dataset_dir, other_dataset_name, "Depth_original")
-            # os.rename(depth_folder, depth_original_folder)
-
-            # depth_preprocessed_folder = os.path.join(args.dataset_dir, other_dataset_name, "depth_preprocessed")
-            # os.rename(depth_preprocessed_folder, depth_folder)
-
-            # rgb_depth_preprocessed_miou = get_scores_for_model(
-            #     model=args.model,
-            #     config=config_location,
-            #     model_weights=depth_preprocessed_weights_file,
-            #     dataset=os.path.join(args.dataset_dir, other_dataset_name),
-            #     ignore_background=True,
-            #     x_channels=3,
-            #     x_e_channels=1,
-            #     device=device,
-            #     create_confusion_matrix=False,
-            # )
-
-            # os.rename(depth_folder, depth_preprocessed_folder)
-            # os.rename(depth_original_folder, depth_folder)
-
             with open(log_file, "a") as f:
-                f.write(
-                    f"\nDataset: {other_dataset_name}\n"
-                    f"RGB-D mIoU: {rgbd_miou}\n"
-                    f"RGB-D Aux mIoU: {rgbd_aux_miou}\n"
-                    f"RGB mIoU: {rgb_miou}\n"
-                    # f"Depth mIoU: {depth_miou}\n"
-                    # f"RGB with preprocessed Depth mIoU: {rgb_depth_preprocessed_miou}\n"
+                    f.write(
+                        f"\nDataset: {other_dataset_name}\n"
+                    )
+
+            for model_name in model_file_names:
+                model_weights_file = model_files[model_name]
+                x_channels = x_channels_map.get(model_name, 3)
+                x_e_channels = x_e_channels_map.get(model_name, 1)
+
+                miou_value = get_scores_for_model(
+                    model=args.model,
+                    config=config_location,
+                    model_weights=model_weights_file,
+                    dataset=os.path.join(args.dataset_dir, other_dataset_name),
+                    x_channels=x_channels,
+                    x_e_channels=x_e_channels,
+                    device=device,
+                    create_confusion_matrix=False,
                 )
+
+                with open(log_file, "a") as f:
+                    f.write(
+                        f"{model_name.upper()} mIoU: {miou_value}\n"
+                    )

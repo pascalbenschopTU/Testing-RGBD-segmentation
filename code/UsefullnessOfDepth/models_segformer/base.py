@@ -28,4 +28,5 @@ class BaseModel(nn.Module):
 
     def init_pretrained(self, pretrained: str = None) -> None:
         if pretrained:
-            self.backbone.load_state_dict(torch.load(pretrained, map_location='cpu'), strict=False)
+            # self.backbone.load_state_dict(torch.load(pretrained, map_location='cpu'), strict=False)
+            self.backbone.load_state_dict(torch.load(pretrained), strict=False)

@@ -19,160 +19,91 @@ from utils.update_config import update_config
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-def train_models(log_file, args, config_location, dataset_name):
+x_channels_map = {"rgbd": 3, "rgbd_variation": 3, "rgb": 3, "rgb_variation": 3, "depth": 1}
+x_e_channels_map = {"rgbd": 1, "rgbd_variation":1, "rgb": 3, "rgb_variation": 3, "depth": 1}
+
+def train_model_on_dataset(args, dataset_name, config_location, x_channels, x_e_channels, max_train_images=500):
+    best_miou, config = train_model(
+        config_location,
+        checkpoint_dir=args.checkpoint_dir,
+        model=args.model,
+        dataset_classes=args.dataset_classes,
+        num_hyperparameter_samples=args.num_hyperparameter_samples,
+        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
+        num_epochs=args.num_epochs,
+        x_channels=x_channels,
+        x_e_channels=x_e_channels,
+        dataset_name=dataset_name,
+        max_train_images=max_train_images,
+    )
+
+    best_model_weights_dir = config.log_dir
+    for root, dirs, files in os.walk(best_model_weights_dir):
+        for file in files:
+            if file.startswith("epoch"):
+                best_model_weights_file = os.path.join(root, file)
+
+    return best_miou, best_model_weights_file
+
+
+def train_models(log_file, args, config_location, dataset_name, model_file_names, max_train_images=500):
+    model_files = {name: None for name in model_file_names}
+    model_file_index = 0
+
     with open(log_file, "r") as f:
         log_file_contents = f.read()
-        model_files = {}
-        if "Model trained on dataset" in log_file_contents:
-            model_file_names = ["rgbd", "rgb", "depth", "rgbd_variation", "rgb_variation"]
-            model_file_index = 0
+        if f"Model trained on dataset: {dataset_name}" in log_file_contents:
             for line in log_file_contents.split("\n"):
-                if "Model best weights" in line and model_file_index < 5:
+                if "Model best weights" in line and model_file_index < len(model_file_names):
                     model_files[model_file_names[model_file_index]] = line.split(": ")[1]
                     model_file_index += 1
 
-    if len(model_files) == 5:
+    print(f"Model files: {model_files}")
+    # Determine which models need to be trained
+    models_to_train = [name for name, file in model_files.items() if file is None]
+    
+    if len(models_to_train) == 0:
         print("Models already trained on dataset, skipping training")
         return model_files
     
-    with open(log_file, "a") as f:
-        f.write(f"\nModel trained on dataset: {dataset_name}\n\n")
+    if len(models_to_train) == len(model_file_names):
+        with open(log_file, "a") as f:
+            f.write(f"\nModel trained on dataset: {dataset_name}\n\n")
+
 
     # First train the models on the dataset without any variations
     update_config(config_location, {"random_color_jitter": False})
-    
-    rgbd_best_miou, config = train_model(
-        config_location,
-        checkpoint_dir=args.checkpoint_dir,
-        dataset_classes=args.dataset_classes,
-        num_hyperparameter_samples=args.num_hyperparameter_samples,
-        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
-        num_epochs=args.num_epochs,
-        x_channels=3,
-        x_e_channels=1,
-        dataset_name=dataset_name,
-    )
 
-    rgbd_model_weights_file = None
-    rgbd_model_weights_dir = config.log_dir
-    for root, dirs, files in os.walk(rgbd_model_weights_dir):
-        for file in files:
-            if file.startswith("epoch"):
-                rgbd_model_weights_file = os.path.join(root, file)
+    for model_name in models_to_train:
+        x_channels = x_channels_map.get(model_name, 3)
+        x_e_channels = x_e_channels_map.get(model_name, 1)
 
+        if "variation" in model_name:
+            update_config(
+                config_location, 
+                {
+                    "random_color_jitter": True,
+                    "min_color_jitter": 0.7,
+                    "max_color_jitter": 1.3,
+                }   
+            )
 
-    with open(log_file, "a") as f:
-        f.write(f"RGB-D mIoU: {rgbd_best_miou}\nModel best weights: {rgbd_model_weights_file}\n")
+        best_miou, model_weights_file = train_model_on_dataset(
+            args,
+            dataset_name,
+            config_location,
+            x_channels=x_channels,
+            x_e_channels=x_e_channels,
+            max_train_images=max_train_images,
+        )
 
-    
-    rgb_best_miou, config = train_model(
-        config_location,
-        checkpoint_dir=args.checkpoint_dir,
-        dataset_classes=args.dataset_classes,
-        num_hyperparameter_samples=args.num_hyperparameter_samples,
-        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
-        num_epochs=args.num_epochs,
-        x_channels=3,
-        x_e_channels=3,
-        dataset_name=dataset_name,
-    )
+        model_files[model_name] = model_weights_file
 
-    rgb_model_weights_file = None
-    rgb_model_weights_dir = config.log_dir
-    for root, dirs, files in os.walk(rgb_model_weights_dir):
-        for file in files:
-            if file.startswith("epoch"):
-                rgb_model_weights_file = os.path.join(root, file)
+        with open(log_file, "a") as f:
+            f.write(f"{model_name.upper()} mIoU: {best_miou}\nModel best weights: {model_weights_file}\n")
 
-
-    with open(log_file, "a") as f:
-        f.write(f"RGB mIoU: {rgb_best_miou}\nModel best weights: {rgb_model_weights_file}\n")
-
-    
-    depth_best_miou, config = train_model(
-        config_location,
-        checkpoint_dir=args.checkpoint_dir,
-        dataset_classes=args.dataset_classes,
-        num_hyperparameter_samples=args.num_hyperparameter_samples,
-        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
-        num_epochs=args.num_epochs,
-        x_channels=1,
-        x_e_channels=1,
-        dataset_name=dataset_name,
-    )
-
-    depth_model_weights_file = None
-    depth_model_weights_dir = config.log_dir
-    for root, dirs, files in os.walk(depth_model_weights_dir):
-        for file in files:
-            if file.startswith("epoch"):
-                depth_model_weights_file = os.path.join(root, file)
-
-
-    with open(log_file, "a") as f:
-        f.write(f"Depth mIoU: {depth_best_miou}\nModel best weights: {depth_model_weights_file}\n")
-
-    # Train the models on the dataset with variations
-    update_config(
-        config_location, 
-        {
-            "random_color_jitter": True,
-            "min_color_jitter": 0.7,
-            "max_color_jitter": 1.3,
-        }   
-    )
-
-    rgbd_variation_best_miou, config = train_model(
-        config_location,
-        checkpoint_dir=args.checkpoint_dir,
-        dataset_classes=args.dataset_classes,
-        num_hyperparameter_samples=args.num_hyperparameter_samples,
-        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
-        num_epochs=args.num_epochs,
-        x_channels=3,
-        x_e_channels=1,
-        dataset_name=dataset_name,
-    )
-
-    rgbd_variation_model_weights_file = None
-    rgbd_variation_model_weights_dir = config.log_dir
-    for root, dirs, files in os.walk(rgbd_variation_model_weights_dir):
-        for file in files:
-            if file.startswith("epoch"):
-                rgbd_variation_model_weights_file = os.path.join(root, file)
-
-    with open(log_file, "a") as f:
-        f.write(f"RGB-D variation mIoU: {rgbd_variation_best_miou}\nModel best weights: {rgbd_variation_model_weights_file}\n")
-
-    rgb_variation_best_miou, config = train_model(
-        config_location,
-        checkpoint_dir=args.checkpoint_dir,
-        dataset_classes=args.dataset_classes,
-        num_hyperparameter_samples=args.num_hyperparameter_samples,
-        num_hyperparameter_epochs=args.num_hyperparameter_epochs,
-        num_epochs=args.num_epochs,
-        x_channels=3,
-        x_e_channels=3,
-        dataset_name=dataset_name,
-    )
-
-    rgb_variation_model_weights_file = None
-    rgb_variation_model_weights_dir = config.log_dir
-    for root, dirs, files in os.walk(rgb_variation_model_weights_dir):
-        for file in files:
-            if file.startswith("epoch"):
-                rgb_variation_model_weights_file = os.path.join(root, file)
-
-    with open(log_file, "a") as f:
-        f.write(f"RGB variation mIoU: {rgb_variation_best_miou}\nModel best weights: {rgb_variation_model_weights_file}\n\n")
-
-    model_files = {
-        "rgbd": rgbd_model_weights_file,
-        "rgb": rgb_model_weights_file,
-        "rgbd_variation": rgbd_variation_model_weights_file,
-        "rgb_variation": rgb_variation_model_weights_file,
-        "depth": depth_model_weights_file,
-    }
+        if "variation" in model_name:
+            update_config(config_location, {"random_color_jitter": False})
 
     return model_files
 
@@ -211,7 +142,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-hs", "--num_hyperparameter_samples",
         type=int,
-        default=10,
+        default=15,
         help="The number of samples to use for hyperparameter tuning",
     )
     parser.add_argument(
@@ -238,6 +169,19 @@ if __name__ == "__main__":
         type=str,
         default=["saturation", "brightness", "hue"],
         help="The experiments to run on the dataset",
+    )
+    parser.add_argument(
+        "-mti", "--max_train_images",
+        type=int,
+        default=500,
+        help="The maximum number of training images to use for training",
+    )
+    parser.add_argument(
+        "-mn", "--model_names",
+        nargs="+",
+        type=str,
+        default=["rgbd", "rgbd_variation"],
+        help="The names of the models to train",
     )
     args = parser.parse_args()
     date_time = time.strftime("%Y%m%d_%H%M%S")
@@ -283,18 +227,15 @@ if __name__ == "__main__":
         # Copy RGB to RGB_original with python
         shutil.copytree(RGB_folder, RGB_original_folder)
 
+    model_file_names = args.model_names
     model_files = train_models(
         log_file=log_file,
         args=args,
         config_location=config_location,
         dataset_name=dataset_name,
+        model_file_names=model_file_names,
+        max_train_images=args.max_train_images,
     )
-
-    rgbd_model_weights_file = model_files["rgbd"]
-    rgb_model_weights_file = model_files["rgb"]
-    rgbd_variation_model_weights_file = model_files["rgbd_variation"]
-    rgb_variation_model_weights_file = model_files["rgb_variation"]
-    depth_model_weights_file = model_files["depth"]
 
     experiments = ["saturation", "brightness", "hue"]
 
@@ -313,6 +254,7 @@ if __name__ == "__main__":
 
         property_values = property_values_test[i]
         for property_value in property_values:
+            
             adapt_property(
                 origin_directory_path=RGB_original_folder,
                 destination_directory_path=RGB_folder,
@@ -321,56 +263,34 @@ if __name__ == "__main__":
                 split="test",
             )
 
-            miou_value_rgbd_variation = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgbd_variation_model_weights_file,
-                dataset=args.dataset_dir,
-                x_channels=3,
-                x_e_channels=1,
-                device=device,
-                create_confusion_matrix=False,
-            )
-
-            miou_value_rgb_variation = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgb_variation_model_weights_file,
-                dataset=args.dataset_dir,
-                x_channels=3,
-                x_e_channels=3,
-                device=device,
-                create_confusion_matrix=False,
-            )
-
-            miou_value_rgbd = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgbd_model_weights_file,
-                dataset=args.dataset_dir,
-                x_channels=3,
-                x_e_channels=1,
-                device=device,
-                create_confusion_matrix=False,
-            )
-
-            miou_value_rgb = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgb_model_weights_file,
-                dataset=args.dataset_dir,
-                x_channels=3,
-                x_e_channels=3,
-                device=device,
-                create_confusion_matrix=False,
-            )
-
             with open(log_file, "a") as f:
                 f.write(
                     f"Property: {experiments[i]} Property value: {property_value}\n"
-                    f"RGB-D mIoU: {miou_value_rgbd} RGB-D variation mIoU: {miou_value_rgbd_variation}\n"
-                    f"RGB mIoU: {miou_value_rgb} RGB variation mIoU: {miou_value_rgb_variation}\n"
                 )
+
+            for model_name in model_file_names:
+                model_weights_file = model_files[model_name]
+                x_channels = x_channels_map.get(model_name, 3)
+                x_e_channels = x_e_channels_map.get(model_name, 1)
+
+                print(f"Model: {model_name}, x_channels: {x_channels}, x_e_channels: {x_e_channels}")
+
+                miou_value = get_scores_for_model(
+                    model=args.model,
+                    config=config_location,
+                    model_weights=model_weights_file,
+                    dataset=dataset_name,
+                    x_channels=x_channels,
+                    x_e_channels=x_e_channels,
+                    device=device,
+                    create_confusion_matrix=False,
+                    ignore_background=False,
+                )
+
+                with open(log_file, "a") as f:
+                    f.write(
+                        f"{model_name.upper()} mIoU: {miou_value}\n"
+                    )
 
         # Reset the RGB folder to the original state
         shutil.rmtree(RGB_folder)
@@ -387,6 +307,8 @@ if __name__ == "__main__":
     else:
         for dataset_name in os.listdir(dataset_test_root_dir):
             dataset_test_dir = os.path.join(dataset_test_root_dir, dataset_name)
+            # if not dataset_name in args.dataset_dir:
+            #     continue
             
             update_config(
                 config_location, 
@@ -394,74 +316,40 @@ if __name__ == "__main__":
                     "dataset_name": dataset_test_dir,
                 }   
             )
-            
-            miou_value_rgbd_variation = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgbd_variation_model_weights_file,
-                dataset=dataset_test_dir,
-                x_channels=3,
-                x_e_channels=1,
-                device=device,
-                create_confusion_matrix=False,
-                bin_size=dataset_length,
-            )
-
-            miou_value_rgb_variation = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgb_variation_model_weights_file,
-                dataset=dataset_test_dir,
-                x_channels=3,
-                x_e_channels=3,
-                device=device,
-                create_confusion_matrix=False,
-                bin_size=dataset_length,
-            )
-
-            miou_value_rgbd = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgbd_model_weights_file,
-                dataset=dataset_test_dir,
-                x_channels=3,
-                x_e_channels=1,
-                device=device,
-                create_confusion_matrix=False,
-                bin_size=dataset_length,
-            )
-
-            miou_value_rgb = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgb_model_weights_file,
-                dataset=dataset_test_dir,
-                x_channels=3,
-                x_e_channels=3,
-                device=device,
-                create_confusion_matrix=False,
-                bin_size=dataset_length,
-            )
-
-            miou_value_depth = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=depth_model_weights_file,
-                dataset=dataset_test_dir,
-                x_channels=1,
-                x_e_channels=1,
-                device=device,
-                create_confusion_matrix=False,
-                bin_size=dataset_length,
-            )
 
             with open(log_file, "a") as f:
                 f.write(
-                    f"\nTest dataset: {dataset_name}\n\n"
-                    f"RGB-D mIoU: {miou_value_rgbd} RGB-D variation mIoU: {miou_value_rgbd_variation}\n"
-                    f"RGB mIoU: {miou_value_rgb} RGB variation mIoU: {miou_value_rgb_variation}\n"
-                    f"Depth mIoU: {miou_value_depth}\n"
+                    f"\n\nExperiment: Light angle\n"
+                    f"\nTest dataset: {dataset_name}\n"
                 )
+            
+            for model_name in model_file_names:
+                model_weights_file = model_files[model_name]
+                x_channels = x_channels_map.get(model_name, 3)
+                x_e_channels = x_e_channels_map.get(model_name, 1)
+
+                miou_value, miou_bins = get_scores_for_model(
+                    model=args.model,
+                    config=config_location,
+                    model_weights=model_weights_file,
+                    dataset=dataset_test_dir,
+                    x_channels=x_channels,
+                    x_e_channels=x_e_channels,
+                    device=device,
+                    create_confusion_matrix=False,
+                    bin_size=dataset_length,
+                    ignore_background=False,
+                    return_bins=True,
+                )
+
+                light_angle = np.linspace(-110, 110, 11)
+
+                with open(log_file, "a") as f:
+                    for bin_index, bin_value in enumerate(miou_bins):
+                        f.write(
+                            f"Property: Light angle Property value: {light_angle[bin_index]}\n"
+                            f"{model_name.upper()} mIoU: {bin_value}\n"
+                        )
 
 
     # Revert the config file to the original state

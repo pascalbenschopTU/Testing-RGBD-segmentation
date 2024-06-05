@@ -13,24 +13,12 @@ class SegFormer(BaseModel):
         self.apply(self._init_weights)
         self.criterion = criterion
         self.cfg = cfg
+        print(f"SegFormer with {backbone} backbone is created.")
 
-    def forward2(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         y = self.backbone(x)
         y = self.decode_head(y)   # 4x reduction in image size
         y = F.interpolate(y, size=x.shape[2:], mode='bilinear', align_corners=False)    # to original image shape
-        return y
-    
-    def forward(self, x: Tensor, depth: Tensor=None, label: Tensor=None) -> Tensor:
-        if len(x.shape) == 3:
-            x = x.unsqueeze(0)
-        y = self.backbone(x)
-        y = self.decode_head(y)   # 4x reduction in image size
-        y = F.interpolate(y, size=x.shape[2:], mode='bilinear', align_corners=False)    # to original image shape
-
-        if label is not None:
-            loss = self.criterion(y, label)[label != self.cfg.background].mean()
-            return loss
-        
         return y
 
 

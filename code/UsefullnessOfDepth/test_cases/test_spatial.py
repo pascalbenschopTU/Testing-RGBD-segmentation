@@ -15,6 +15,9 @@ from utils.evaluate_models import get_scores_for_model
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+x_channels_map = {"rgbd": 3, "rgb": 3, "depth": 1}
+x_e_channels_map = {"rgbd": 1, "rgb": 3, "depth": 1}
+
 def train_model_on_dataset(args, dataset_name, config_location, x_channels, x_e_channels, max_train_images=500):
     best_miou, config = train_model(
         config_location,
@@ -43,9 +46,6 @@ def train_models(log_file, args, config_location, dataset_name, model_file_names
     model_files = {name: None for name in model_file_names}
     model_file_index = 0
 
-    x_channels_map = {"rgbd": 3, "rgb": 3, "depth": 1}
-    x_e_channels_map = {"rgbd": 1, "rgb": 3, "depth": 1}
-
     with open(log_file, "r") as f:
         log_file_contents = f.read()
         has_seen_line = False
@@ -73,7 +73,7 @@ def train_models(log_file, args, config_location, dataset_name, model_file_names
 
     for model_name in models_to_train:
         x_channels = x_channels_map.get(model_name, 3)
-        x_e_channels = x_e_channels_map.get(model_name, 3)
+        x_e_channels = x_e_channels_map.get(model_name, 1)
 
         best_miou, model_weights_file = train_model_on_dataset(
             args,
@@ -211,9 +211,6 @@ if __name__ == "__main__":
             model_file_names=model_file_names,
             max_train_images=args.max_train_images,
         )
-
-        x_channels_map = {"rgbd": 3, "rgb": 3, "depth": 1}
-        x_e_channels_map = {"rgbd": 1, "rgb": 3, "depth": 1}
 
         for other_dataset_name in os.listdir(args.dataset_dir):
             with open(log_file, "a") as f:

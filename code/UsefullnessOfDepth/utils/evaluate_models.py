@@ -14,12 +14,7 @@ from torchmetrics import JaccardIndex
 sys.path.append('../UsefullnessOfDepth')
 
 # Model
-from model_DFormer.builder import EncoderDecoder as segmodel
-from models_CMX.builder import EncoderDecoder as cmxmodel
-from model_pytorch_deeplab_xception.deeplab import DeepLab
-from models_segformer import SegFormer
-from model_TokenFusion.segformer import WeTr
-
+from utils.model_wrapper import ModelWrapper
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.dataloader.dataloader import get_val_loader, get_train_loader
 from utils.engine.logger import get_logger
@@ -27,10 +22,16 @@ from utils.metrics_new import Metrics
 
 
 class Evaluator(object):
-    def __init__(self, num_class, ignore_index=255):
+    def __init__(self, num_class, bin_size=1000, ignore_index=255):
         self.num_class = num_class
         self.ignore_index = ignore_index
         self.confusion_matrix = np.zeros((self.num_class,)*2)
+        self.bin_size = bin_size
+        self.bin_count = 0
+        self.bin_confusion_matrix = np.zeros((self.num_class,)*2)
+        self.bin_mious = []
+        self.bin_stdious = []
+        
 
     def Pixel_Accuracy(self):
         Acc = np.diag(self.confusion_matrix).sum() / self.confusion_matrix.sum()
@@ -109,6 +110,31 @@ class Evaluator(object):
     def add_batch(self, gt_image, pre_image):
         assert gt_image.shape == pre_image.shape
         self.confusion_matrix += self._generate_matrix(gt_image, pre_image)
+        self.bin_confusion_matrix += self._generate_matrix(gt_image, pre_image)
+        if self.bin_count == self.bin_size:
+            _, bin_stdiou, bin_miou = self.compute_iou()
+            self.bin_mious.append(bin_miou)
+            self.bin_stdious.append(bin_stdiou)
+            self.bin_confusion_matrix = np.zeros((self.num_class,) * 2)
+            self.bin_count = 0
+        else:
+            self.bin_count += 1
+
+    def calculate_results(self, ignore_class=-1):
+        if self.bin_count > 0:
+            _, bin_stdiou, bin_miou = self.compute_iou()
+            self.bin_mious.append(bin_miou)
+            self.bin_stdious.append(bin_stdiou)
+        if ignore_class != -1:
+            self.confusion_matrix = np.delete(self.confusion_matrix, ignore_class, axis=0)
+            self.confusion_matrix = np.delete(self.confusion_matrix, ignore_class, axis=1)
+
+        self.ious, self.iou_std, self.miou = self.compute_iou()
+        self.acc, self.macc = self.compute_pixel_acc()
+        self.mf1 = self.F1_Score()
+        self.pixel_acc_class = self.Pixel_Accuracy_Class()
+        self.fwiou = self.Frequency_Weighted_Intersection_over_Union()
+
 
     def reset(self):
         self.confusion_matrix = np.zeros((self.num_class,) * 2)
@@ -121,31 +147,81 @@ def set_config_if_dataset_specified(config, dataset_location):
     config.train_source = os.path.join(config.dataset_path, "train.txt")
     config.eval_source = os.path.join(config.dataset_path, "test.txt")
     return config
-
-def set_model_weights_if_not_specified(config):
-    try:
-        config_dir = "checkpoints"
-        dataset_name = config.dataset_name
-        model_name = config.backbone
-        checkpoint_dir = os.path.join(config_dir, f"{dataset_name}_{model_name}")
-        last_run_dir = ""
-        for run_dir in os.listdir(checkpoint_dir):
-            if "run" in run_dir:
-                last_run_dir = run_dir
-        last_run_dir = os.path.join(checkpoint_dir, last_run_dir)
-        last_model_weights_file = ""
-        for file in os.listdir(last_run_dir):
-            if "pth" in file:
-                last_model_weights_file = file
-        model_weights = os.path.join(last_run_dir, last_model_weights_file)
-        logger.info(f"Using model weights file: {model_weights}")
-    except Exception as e:
-        logger.error(f"Could not find model weights file. Please specify it using --model_weights. Error: {e}")
-        sys.exit(1)
-    return model_weights
-
-# , results_file="results.txt")
+    
 logger = get_logger()
+def load_config(config, dataset=None, x_channels=-1, x_e_channels=-1):
+    module_name = config.replace(".py", "").replace("\\", ".").lstrip(".")
+    config_module = importlib.import_module(module_name)
+    config = config_module.config
+    
+    if x_channels != -1 and x_e_channels != -1:
+        config.x_channels = x_channels
+        config.x_e_channels = x_e_channels
+
+    if dataset is not None:
+        config = set_config_if_dataset_specified(config, dataset)
+    
+    return config
+
+def initialize_model(config, model_weights, device):
+    criterion = nn.CrossEntropyLoss(reduction='mean')
+    BatchNorm2d = nn.BatchNorm2d
+
+    model = ModelWrapper(config, criterion=criterion, norm_layer=BatchNorm2d, pretrained=True)
+    
+    try:
+        weight = torch.load(model_weights)['model']
+        logger.info(f'load model {config.backbone} weights : {model_weights}')
+        model.load_state_dict(weight, strict=False)
+    except Exception as e:
+        logger.error(f"Invalid model weights file: {model_weights}. Error: {e}")
+    
+    model.to(device)
+    return model
+
+def plot_confusion_matrix(confusion_matrix, class_names, model_weights_dir, miou):
+    epsilon = 1e-7  # Small constant
+    confusion_matrix = confusion_matrix.astype('float') / (confusion_matrix.sum(axis=1)[:, np.newaxis] + epsilon)
+    
+    default_figsize = (10, 10)
+    if len(class_names) > 15:
+        default_figsize = (20, 20)
+    if len(class_names) < 5:
+        default_figsize = (5, 5)
+
+    plt.figure(figsize=default_figsize)
+    sns.heatmap(confusion_matrix, annot=True, fmt=".3f", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title(f"Confusion Matrix, mIoU: {miou:.2f}")
+    plt.tight_layout()
+    
+    result_file_name = os.path.join(model_weights_dir, 'confusion_matrix.png')
+    if os.path.exists(result_file_name):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        result_file_name = os.path.join(model_weights_dir, f'confusion_matrix_{timestamp}.png')
+    
+    plt.savefig(result_file_name)
+
+def save_results(model_results_file, metric, num_params, rgb_metric=None, depth_metric=None):
+    class_ious = "[" + " ".join([f"{iou:.1f}" for iou in metric.ious]) + "]"
+
+
+    with open(model_results_file, 'a') as f:
+        f.write(f'miou: {metric.miou:.2f}, macc: {metric.macc:.2f}, mf1: {metric.mf1:.2f}, class ious: {class_ious}\n')
+        f.write(f'model parameters: {num_params}\n')
+        if len(metric.bin_mious) > 1:
+            f.write(f'bin_mious: {metric.bin_mious} ')
+            f.write(f'bin_stdious: {metric.bin_stdious}\n')
+        if rgb_metric is not None and depth_metric is not None:
+            f.write(f'rgb_miou: {rgb_metric.miou:.2f}, depth_miou: {depth_metric.miou:.2f}\n')
+            if len(rgb_metric.bin_mious) > 1:
+                f.write(f'rgb_bin_mious: {rgb_metric.bin_mious} ')
+                f.write(f'rgb_bin_stdious: {rgb_metric.bin_stdious}\n')
+            if len(depth_metric.bin_mious) > 1:
+                f.write(f'depth_bin_mious: {depth_metric.bin_mious} ')
+                f.write(f'depth_bin_stdious: {depth_metric.bin_stdious}\n') 
+
 def get_scores_for_model(
         model, 
         config, 
@@ -159,158 +235,69 @@ def get_scores_for_model(
         results_file="results.txt",
         device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         create_confusion_matrix=True,
+        return_bins=False
     ):
     print("device: ", device)
-    module_name = config
-    if ".py" in module_name:
-        module_name = module_name.replace(".py", "")
-        module_name = module_name.replace("\\", ".")
-        while module_name.startswith("."):
-            module_name = module_name[1:]
 
-    config_module = importlib.import_module(module_name)
-    config = config_module.config
-    if x_channels != -1 and x_e_channels != -1:
-        config.x_channels = x_channels
-        config.x_e_channels = x_e_channels
+    # Load and configure model
+    config = load_config(config, dataset, x_channels, x_e_channels)
 
-    if model is not None:
-        if model == "DFormer-Tiny":
-            config.backbone = "DFormer-Tiny"
-        if model == "DFormer-Large":
-            config.backbone = "DFormer-Large"
-        if model == "CMX_B2":
-            config.backbone = "mit_b2"
-        if model == "Xception":
-            config.backbone = "xception"
-        if model == "segformer":
-            config.backbone = "segformer"
-        if model == "TokenFusion":
-            config.backbone = "mit_b1"
+    if not ignore_background:
+        config.background = -1
 
+    # Initialize model
+    model = initialize_model(config, model_weights, device)
+    
+    # Get validation loader
+    val_loader, val_sampler = get_val_loader(None, RGBXDataset, config, 1)
 
+    metric, rgb_metric, depth_metric = evaluate(
+        model=model,
+        dataloader=val_loader,
+        config=config,
+        device=device,
+        bin_size=bin_size,
+        ignore_background=ignore_background
+    )
+
+    miou = metric.miou
+
+    # Plot confusion matrix
+    if create_confusion_matrix:
+        plot_confusion_matrix(metric.confusion_matrix, config.class_names, os.path.dirname(model_weights), miou)
+
+    # Save results
     model_weights_dir = os.path.dirname(model_weights)
     model_results_file = os.path.join(model_weights_dir, results_file)
-
-    if dataset is not None:
-        config = set_config_if_dataset_specified(config, dataset)
-
-    val_loader, val_sampler = get_val_loader(None, RGBXDataset,config,1)
-
-    criterion = nn.CrossEntropyLoss(reduction='none')
-    BatchNorm2d = nn.BatchNorm2d
-
-    if "DFormer" in config.backbone:
-        model = segmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
-    if config.backbone == "mit_b2":
-        model = cmxmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
-    if config.backbone == "xception":
-        model = DeepLab(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
-    if config.backbone == "segformer":
-        model = SegFormer(cfg=config, criterion=criterion)
-    if config.backbone == "mit_b1":
-        model = WeTr(cfg=config)
-    
-    try:
-        weight = torch.load(model_weights)['model']
-        # print('load model: ', model_weights)
-        logger.info(f'load model {config.backbone} weights : {model_weights}')
-        model.load_state_dict(weight, strict=False)
-    except Exception as e:
-        logger.error(f"Invalid model weights file: {model_weights}. Error: {e}")
-    
-    model.to(device)
-
-    # Get #parameters of model
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    
-    logger.info('begin testing:')
 
-    # Get class names from config
-    class_names = config.class_names
-    
-    with torch.no_grad():
-        model.eval()
-        metric, mious, iou_stds, rgb_metric, depth_metric = evaluate(
-            model=model,
-            dataloader=val_loader,
-            config=config,
-            device=device,
-            bin_size=bin_size,
-            ignore_background=ignore_background
-        )
-            
-        if ignore_background:
-            # metric.confusion_matrix = metric.confusion_matrix[1:, 1:]
-            class_names = class_names[1:]
-        # miou = metric.Mean_Intersection_over_Union()
-        ious, iou_std, miou = metric.compute_iou()
-        if background_only:
-            miou = ious[0]
-        acc, macc = metric.compute_pixel_acc()
-        mf1 = metric.F1_Score()
-        pixel_acc_class = metric.Pixel_Accuracy_Class()
-        fwiou = metric.Frequency_Weighted_Intersection_over_Union()
-        print('miou, macc, mf1, pixel_acc_class, fwiou: ',miou, macc, mf1, pixel_acc_class, fwiou)
-        
-        confusion_matrix = metric.confusion_matrix
-        
-        # Normalize confusion matrix
-        epsilon = 1e-7  # Small constant
-        confusion_matrix = confusion_matrix.astype('float') / (confusion_matrix.sum(axis=1)[:, np.newaxis] + epsilon)
-        
-        default_figsize = (10, 10)
-        if len(class_names) > 15:
-            default_figsize = (20, 20)
-        if len(class_names) < 5:
-            default_figsize = (5, 5)
+    rgb_miou=rgb_metric.miou if rgb_metric else None, 
+    depth_miou=depth_metric.miou if depth_metric else None
+    if rgb_miou is not None and depth_miou is not None:
+        miou = [miou, rgb_miou, depth_miou]
 
-        if create_confusion_matrix:
-            # Plot confusion matrix
-            plt.figure(figsize=default_figsize)
-            sns.heatmap(confusion_matrix, annot=True, fmt=".3f", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
-            plt.xlabel("Predicted")
-            plt.ylabel("True")
-            plt.title("Confusion Matrix, mIoU: {:.2f}".format(miou))
-            plt.tight_layout()
-            result_file_name = os.path.join(model_weights_dir, 'confusion_matrix.png')
-            if os.path.exists(result_file_name):
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                result_file_name = os.path.join(model_weights_dir, f'confusion_matrix_{timestamp}.png')
-            plt.savefig(result_file_name)
+    save_results(model_results_file, metric, num_params, rgb_metric, depth_metric)
 
-        with open(model_results_file, 'a') as f:
-            f.write(f'miou: {miou:.2f}, macc: {macc:.2f}, mf1: {mf1:.2f}, mious: [{", ".join([f"{iou:.2f}" for iou in mious])}], iou_stds: [{", ".join([f"{iou_std:.2f}" for iou_std in iou_stds])}]\n')
-            f.write(f'model parameters: {num_params}\n')
-
-        if rgb_metric is not None and depth_metric is not None:
-            rgb_mious, rgb_iou_stds, rgb_miou = rgb_metric.compute_iou()
-            depth_mious, depth_iou_stds, depth_miou = depth_metric.compute_iou()
-            print('rgb_miou, depth_miou: ', rgb_miou, depth_miou)
-            with open(model_results_file, 'a') as f:
-                f.write(f'rgb_miou: {rgb_miou:.2f}, depth_miou: {depth_miou:.2f}\n')
-            
-            miou = [miou, rgb_miou, depth_miou]
-
-        return miou
-
-            
+    if return_bins:
+        return miou, metric.bin_mious
+    return miou
+   
             
 @torch.no_grad()
 def evaluate(model, dataloader, config, device, bin_size=1, ignore_background=False):
     model.eval()
     n_classes = config.num_classes
+    if not ignore_background:
+        config.background = -1
     # metrics = Metrics(n_classes, config.background - 100, device)
-    evaluator = Evaluator(n_classes, ignore_index=config.background)
-    bin_evaluator = Evaluator(n_classes, ignore_index=config.background)
-    jaccard = JaccardIndex(task='multiclass', num_classes=n_classes).to(device)
+    evaluator = Evaluator(n_classes, bin_size=bin_size, ignore_index=config.background)
 
     rgb_evaluator = None
     depth_evaluator = None
 
-    if isinstance(model, WeTr):
-        rgb_evaluator = Evaluator(n_classes, ignore_index=config.background)
-        depth_evaluator = Evaluator(n_classes, ignore_index=config.background)
+    if model.is_token_fusion:
+        rgb_evaluator = Evaluator(n_classes, bin_size=bin_size, ignore_index=config.background)
+        depth_evaluator = Evaluator(n_classes, bin_size=bin_size, ignore_index=config.background)
 
     mious = []
     iou_stds = []
@@ -326,7 +313,7 @@ def evaluate(model, dataloader, config, device, bin_size=1, ignore_background=Fa
         images = [images.to(device), modal_xs.to(device)]
         labels = labels.to(device)
         preds = model(images[0], images[1])
-        if isinstance(model, WeTr):
+        if model.is_token_fusion:
             preds, masks = preds[0], preds[1]
             preds_rgb = preds[0].softmax(dim=1)
             preds_depth = preds[1].softmax(dim=1)
@@ -339,22 +326,14 @@ def evaluate(model, dataloader, config, device, bin_size=1, ignore_background=Fa
 
         # metrics.update(preds, labels)
         evaluator.add_batch(labels.cpu().numpy(), preds.argmax(1).cpu().numpy())
-        bin_evaluator.add_batch(labels.cpu().numpy(), preds.argmax(1).cpu().numpy())
-        
-        if i > 0 and (i % bin_size == 0 or i == len(dataloader) - 1):
-            if ignore_background:
-                bin_evaluator.confusion_matrix = np.delete(bin_evaluator.confusion_matrix, config.background, axis=0)
-                bin_evaluator.confusion_matrix = np.delete(bin_evaluator.confusion_matrix, config.background, axis=1)
-            ious, iou_std, miou = bin_evaluator.compute_iou()
-            mious.append(miou)
-            iou_stds.append(iou_std)
-            bin_evaluator.reset()
 
-    if ignore_background:
-        evaluator.confusion_matrix = np.delete(evaluator.confusion_matrix, config.background, axis=0)
-        evaluator.confusion_matrix = np.delete(evaluator.confusion_matrix, config.background, axis=1)
+    evaluator.calculate_results(ignore_class=config.background)
+    if rgb_evaluator is not None and depth_evaluator is not None:
+        rgb_evaluator.calculate_results(ignore_class=config.background)
+        depth_evaluator.calculate_results(ignore_class=config.background)
         
-    return evaluator, mious, iou_stds, rgb_evaluator, depth_evaluator
+    return evaluator, rgb_evaluator, depth_evaluator
+
 
 @torch.no_grad()
 def evaluate_torch(model, dataloader, config, device, ignore_class=-1):
@@ -362,8 +341,8 @@ def evaluate_torch(model, dataloader, config, device, ignore_class=-1):
     model.eval()
     n_classes = config.num_classes
     metrics = [Metrics(n_classes, ignore_class, device)]
-    if isinstance(model, WeTr):
-        metrics = [Metrics(n_classes, ignore_class, device) for _ in range(model.num_parallel + 1)]
+    if model.is_token_fusion:
+        metrics = [Metrics(n_classes, ignore_class, device) for _ in range(model.model.num_parallel + 1)]
 
     use_aux = config.get('use_aux', False)
 
@@ -399,7 +378,6 @@ def evaluate_torch(model, dataloader, config, device, ignore_class=-1):
             metrics[0].update(preds.softmax(dim=1), labels)
 
     return metrics
-
 
 
 if __name__ == '__main__':

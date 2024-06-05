@@ -14,12 +14,6 @@ from functools import partial
 
 sys.path.append('../UsefullnessOfDepth')
 
-# Model
-from model_DFormer.builder import EncoderDecoder as segmodel
-from models_CMX.builder import EncoderDecoder as cmxmodel
-from model_pytorch_deeplab_xception.deeplab import DeepLab
-from models_segformer import SegFormer
-
 # Dataset
 from utils.dataloader.dataloader import get_train_loader,get_val_loader, ValPre
 from utils.dataloader.RGBXDataset import RGBXDataset
@@ -178,7 +172,7 @@ def update_config_paths(config):
     
     return config
 
-def tune_hyperparameters(config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, gpus_per_trial=1, train_callback=None):
+def tune_hyperparameters(config, num_samples=20, max_num_epochs=5, cpus_per_trial=4, gpus_per_trial=1, train_callback=None):
     config = update_config_paths(config)
 
     experiment_name = f"{config.dataset_name}_{config.backbone}"
@@ -219,6 +213,8 @@ def tune_hyperparameters(config, num_samples=20, max_num_epochs=5, cpus_per_tria
     torch.set_float32_matmul_precision("high")
     torch._dynamo.config.suppress_errors = True
 
+    ray.init()
+
     tuner = tune.Tuner(
         tune.with_resources(
             tune.with_parameters(
@@ -257,19 +253,3 @@ def tune_hyperparameters(config, num_samples=20, max_num_epochs=5, cpus_per_tria
     ray.shutdown()
 
     return best_config
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--config",
-        type=str,
-        default="DFormer.local_configs.SynthDet.SynthDet_black_back_default_2_Dformer_Tiny",
-        help="The config to use for training the model",
-    )
-    args = parser.parse_args()
-
-    config_module = importlib.import_module(args.config)
-    config = config_module.config
-
-    final_config = tune_hyperparameters(config, num_samples=20, max_num_epochs=5, cpus_per_trial=16, gpus_per_trial=1, experiment_name="empty")

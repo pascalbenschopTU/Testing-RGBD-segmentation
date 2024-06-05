@@ -96,8 +96,10 @@ class AlignedXception(nn.Module):
     Modified Alighed Xception
     """
     def __init__(self, output_stride, BatchNorm,
-                 pretrained=True):
+                 pretrained=True, pretrained_file=None):
         super(AlignedXception, self).__init__()
+
+        self.pretrained_file = pretrained_file
 
         if output_stride == 16:
             entry_block3_stride = 2
@@ -176,7 +178,7 @@ class AlignedXception(nn.Module):
         self._init_weight()
 
         # Load pretrained model
-        if pretrained:
+        if pretrained and pretrained_file is not None:
             self._load_pretrained_model()
 
     def forward(self, x):
@@ -247,7 +249,8 @@ class AlignedXception(nn.Module):
     def _load_pretrained_model(self):
         try:
             # code\UsefullnessOfDepth
-            pretrain_dict = torch.load(r'UsefullnessOfDepth\checkpoints\pretrained\xception-b5690688.pth')
+            print("Loading pretrained Xception model from ", self.pretrained_file)
+            pretrain_dict = torch.load(self.pretrained_file)
         except Exception as e:
             print("The pretrained file is not in the correct location")
             return

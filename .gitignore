@@ -9,6 +9,11 @@ pytorch-deeplab-xception/
 SynthDet/
 SynthDet_Pascal/
 src/
+*.txt
+*.egg
+*.pyc
+*.pyd
+*.egg-info
 
 *.meta
 log.txt

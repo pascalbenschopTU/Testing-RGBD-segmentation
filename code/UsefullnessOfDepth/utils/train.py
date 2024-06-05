@@ -13,24 +13,14 @@ from torchvision.utils import make_grid
 from tensorboardX import SummaryWriter
 import numpy as np
 
-sys.path.append('../UsefullnessOfDepth')
-
-# Model
-from model_DFormer.builder import EncoderDecoder as segmodel
-from model_DFormer.builder import EncoderDecoderMultiTask as segmodel_multitask
-from models_CMX.builder import EncoderDecoder as cmxmodel
-from model_pytorch_deeplab_xception.deeplab import DeepLab
-from models_segformer import SegFormer
-from model_TokenFusion.segformer import WeTr
-
 # Utils
 from utils.dataloader.dataloader import get_train_loader,get_val_loader
 from utils.dataloader.RGBXDataset import RGBXDataset
-from utils.init_func import init_weight, group_weight, configure_optimizers
 from utils.lr_policy import WarmUpPolyLR
 from utils.evaluate_models import evaluate_torch
 from utils.hyperparameter_tuning import tune_hyperparameters
 from utils.update_config import update_config
+from utils.model_wrapper import ModelWrapper
 
 class DummyTB:
     def add_scalar(self, *args, **kwargs):
@@ -121,10 +111,6 @@ def set_seed(seed):
     torch.use_deterministic_algorithms(True, warn_only=True)
 
 def train_model_from_config(config, **kwargs):
-    # import torch
-    # torch.set_float32_matmul_precision("high")
-    # import torch._dynamo
-    # torch._dynamo.config.suppress_errors = True
     print(f"Using kwargs: {kwargs}")
 
     # set_seed(config.seed)
@@ -132,7 +118,6 @@ def train_model_from_config(config, **kwargs):
     is_tuning = kwargs.get('is_tuning', False)
     use_tb = config.get('use_tb', False)
     use_aux = config.get('use_aux', False)
-
 
     tb, tb_summary = DummyTB(), DummySummary()
     if not is_tuning:
@@ -159,26 +144,15 @@ def train_model_from_config(config, **kwargs):
     BatchNorm2d = nn.BatchNorm2d
     
     base_lr = config.lr
-    params_list = []
 
-    if "DFormer" in config.backbone:
-        if use_aux:
-            model = segmodel_multitask(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
-        else:
-            model = segmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
-        params_list = group_weight(params_list, model, BatchNorm2d, base_lr)
-    if config.backbone == "mit_b2":
-        model = cmxmodel(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
-        params_list = group_weight(params_list, model, BatchNorm2d, base_lr)
-    if config.backbone == "xception":
-        model = DeepLab(cfg=config, criterion=criterion, norm_layer=BatchNorm2d)
-        params_list = group_weight(params_list, model, BatchNorm2d, base_lr)
-    if config.backbone == "segformer":
-        model = SegFormer(cfg=config, criterion=criterion)
-        params_list = group_weight(params_list, model, BatchNorm2d, base_lr)
-    if config.backbone == "mit_b1":
-        model = WeTr(cfg=config)
-        params_list = model.get_param_groups(base_lr, config.weight_decay)
+    model = ModelWrapper(
+        config=config,
+        criterion=criterion,
+        norm_layer=BatchNorm2d,
+        pretrained=True,
+    )
+
+    params_list = model.params_list
     
     
     if config.optimizer == 'AdamW':
@@ -237,20 +211,21 @@ def train_model_from_config(config, **kwargs):
                 loss = criterion(output[0], gts.long()) + config.aux_rate * criterion(output[1], label)
                 output = output[0]
             else:
-                if isinstance(model, WeTr) and isinstance(output, list):  # Output of TokenFusion
+                if model.is_token_fusion and isinstance(output, list):  # Output of TokenFusion
                     output, masks = output
                     loss = 0
                     for out in output:
                         soft_output = F.log_softmax(out, dim=1)
                         loss += criterion(soft_output, gts)
+
+                    if config.lamda > 0:
+                        L1_loss = 0
+                        for mask in masks:
+                            L1_loss += sum([torch.abs(m).sum().cuda() for m in mask])
+                        loss += config.lamda * L1_loss
                 else:
                     loss = criterion(output, gts.long())
             
-            if 'masks' in locals() and masks is not None and config.lamda > 0:
-                L1_loss = 0
-                for mask in masks:
-                    L1_loss += sum([torch.abs(m).sum().cuda() for m in mask])
-                loss += config.lamda * L1_loss
 
             optimizer.zero_grad()
             loss.backward()
@@ -302,13 +277,11 @@ def train_model_from_config(config, **kwargs):
                     ious_aux, miou_aux = metrics[1].compute_iou()
                     mious = [miou, miou_aux]
                     print('aux_miou: ', miou_aux)
-                if isinstance(model, WeTr):
+                if model.is_token_fusion:
                     _, rgb_miou = metrics[1].compute_iou()
                     _, depth_miou = metrics[2].compute_iou()
                     mious = [miou, rgb_miou, depth_miou]
                     print('rgb_miou: ', rgb_miou, 'depth_miou: ', depth_miou)
-
-                miou = max(mious)
 
                 if not is_tuning:
                     if miou > best_miou:
@@ -390,7 +363,7 @@ def run_hyperparameters(config_location, file_path, num_samples, num_hyperparame
         config, 
         num_samples=num_samples, 
         max_num_epochs=num_hyperparameter_epochs, 
-        cpus_per_trial=8, 
+        cpus_per_trial=4, 
         gpus_per_trial=1,
         train_callback=train_model_from_config
     )
@@ -433,28 +406,10 @@ def train_model(config_location: str,
     elif "SUNRGBD" in config_location:
         config = prepare_SUNRGBD_config(config_location, x_channels, x_e_channels, num_epochs)
 
-    if model == "DFormer-Tiny":
-        config.decoder = "ham"
-        config.backbone = "DFormer-Tiny"
-    if model == "DFormer-Large":
-        config.decoder = "ham"
-        config.backbone = "DFormer-Large"
-        config.drop_path_rate = 0.2
-    if model == "CMX-B2":
-        config.decoder = "MLPDecoder"
-        config.backbone = "mit_b2"
-    if model == "DeepLab":
-        config.backbone = "xception"
-    if model == "segformer":
-        config.backbone = "segformer"
-    if model == "TokenFusion":
-        config.backbone = "mit_b1"
-
     config = update_config(
         config_location, 
         {
-            "backbone": config.backbone,
-            "decoder": config.decoder,
+            "model": model,
             "checkpoint_dir": checkpoint_dir,
             "num_train_imgs": max(1, min(config.num_train_imgs, max_train_images)),
         }

@@ -16,6 +16,9 @@ from utils.evaluate_models import get_scores_for_model
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+x_channels_map = {"rgbd": 3, "rgb": 3, "depth": 1}
+x_e_channels_map = {"rgbd": 1, "rgb": 3, "depth": 1}
+
 def train_model_on_dataset(args, dataset_name, config_location, x_channels, x_e_channels, max_train_images=500):
     best_miou, config = train_model(
         config_location,
@@ -70,14 +73,14 @@ def train_models(log_file, args, config_location, dataset_name, model_file_names
         with open(log_file, "a") as f:
             f.write(f"\nModel trained on dataset: {dataset_name}\n\n")
 
-    update_config(
-        config_location, 
-        {
-            "use_aux": True,
-            "aux_rate": 0.5,
-        }   
-    )
     if "rgbd_aux" in models_to_train:
+        update_config(
+            config_location, 
+            {
+                "use_aux": True,
+                "aux_rate": 0.5,
+            }   
+        )
         rgbd_aux_best_miou, rgbd_aux_model_weights_file = train_model_on_dataset(
             args=args,
             dataset_name=dataset_name,
@@ -259,6 +262,13 @@ if __name__ == "__main__":
         default=200,
         help="The maximum number of images to use for training",
     )
+    parser.add_argument(
+        "-mn", "--model_names",
+        type=str,
+        nargs="+",
+        default=["rgbd", "rgbd_aux"],
+        help="The names of the models to train",
+    )
     args = parser.parse_args()
     date_time = time.strftime("%Y%m%d_%H%M%S")
 
@@ -295,15 +305,11 @@ if __name__ == "__main__":
         if not os.path.exists(dataset_train_file) or os.path.getsize(dataset_train_file) == 0:
             continue
 
-        # Update the config with the dataset_name details
-        rgbd_model_weights_file = None
-        depth_model_weights_file = None
-        rgb_depth_preprocessed_weights_file = None
         # If there is a directory containing the dataset name in the checkpoint dir
         # Check if there are three directories starting with run
         # If there are, skip training the model
         # If there are not, train the model
-        model_file_names = ["rgbd"]
+        model_file_names = args.model_names
         model_files = train_models(
             log_file=log_file,
             args=args,
@@ -313,24 +319,29 @@ if __name__ == "__main__":
             max_train_images=args.max_train_images,
         )
 
-        rgbd_model_weights_file = model_files["rgbd"]
-
-
         for other_dataset_name in os.listdir(args.dataset_dir):
-            rgbd_miou = get_scores_for_model(
-                model=args.model,
-                config=config_location,
-                model_weights=rgbd_model_weights_file,
-                dataset=os.path.join(args.dataset_dir, other_dataset_name),
-                ignore_background=True,
-                x_channels=3,
-                x_e_channels=1,
-                device=device,
-                create_confusion_matrix=False,
-            )
-
             with open(log_file, "a") as f:
-                f.write(
-                    f"\nDataset: {other_dataset_name}\n"
-                    f"RGB-D mIoU: {rgbd_miou}\n"
+                    f.write(
+                        f"\nDataset: {other_dataset_name}\n"
+                    )
+
+            for model_name in model_file_names:
+                model_weights_file = model_files[model_name]
+                x_channels = x_channels_map.get(model_name, 3)
+                x_e_channels = x_e_channels_map.get(model_name, 1)
+
+                miou_value = get_scores_for_model(
+                    model=args.model,
+                    config=config_location,
+                    model_weights=model_weights_file,
+                    dataset=os.path.join(args.dataset_dir, other_dataset_name),
+                    x_channels=x_channels,
+                    x_e_channels=x_e_channels,
+                    device=device,
+                    create_confusion_matrix=False,
                 )
+
+                with open(log_file, "a") as f:
+                    f.write(
+                        f"{model_name.upper()} mIoU: {miou_value}\n"
+                    )

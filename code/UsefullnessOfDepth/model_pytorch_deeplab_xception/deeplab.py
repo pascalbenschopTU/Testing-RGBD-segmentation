@@ -19,34 +19,19 @@ class DeepLab(nn.Module):
             output_stride = 8
 
         BatchNorm = SynchronizedBatchNorm2d if sync_bn else norm_layer
-        self.backbone = build_backbone(backbone, output_stride, BatchNorm)
+        self.backbone = build_backbone(backbone, output_stride, BatchNorm, cfg=cfg)
         self.aspp = build_aspp(backbone, output_stride, BatchNorm)
         self.decoder = build_decoder(num_classes, backbone, BatchNorm)
 
         self.freeze_bn = freeze_bn
 
-    def forward(self, rgb, depth=None, label=None):
-        if len(rgb.size()) == 3:
-            rgb = rgb.unsqueeze(0)
-        if label is not None and len(label.size()) == 2:
-            label = label.unsqueeze(0)
-        x, low_level_feat = self.backbone(rgb)
+    def forward(self, input):
+        x, low_level_feat = self.backbone(input)
         x = self.aspp(x)
         x = self.decoder(x, low_level_feat)
-        x = F.interpolate(x, size=rgb.size()[2:], mode='bilinear', align_corners=True)
-
-        if label is not None:
-            return self.criterion(x, label.long())[label.long() != self.cfg.background].mean()
+        x = F.interpolate(x, size=input.size()[2:], mode='bilinear', align_corners=True)
 
         return x
-
-    # def forward(self, input):
-    #     x, low_level_feat = self.backbone(input)
-    #     x = self.aspp(x)
-    #     x = self.decoder(x, low_level_feat)
-    #     x = F.interpolate(x, size=input.size()[2:], mode='bilinear', align_corners=True)
-
-    #     return x
 
     def freeze_bn(self):
         for m in self.modules():
