@@ -70,6 +70,17 @@ class Evaluator(object):
         iou_std = np.std(ious)
         return np.round(ious * 100, 3), np.round(iou_std * 100, 3), np.round(miou * 100, 3)
     
+    def compute_bin_iou(self):
+        ious = np.diag(self.bin_confusion_matrix) / (
+                    np.sum(self.bin_confusion_matrix, axis=1) + np.sum(self.bin_confusion_matrix, axis=0) - 
+                    np.diag(self.bin_confusion_matrix))
+        if np.all(np.isnan(ious)):
+            print("All ious are NaN", ious)
+        miou = np.nanmean(ious)
+        ious = ious[~np.isnan(ious)]
+        iou_std = np.std(ious)
+        return np.round(ious * 100, 3), np.round(iou_std * 100, 3), np.round(miou * 100, 3)
+    
     def compute_pixel_acc(self):
         acc = np.diag(self.confusion_matrix) / self.confusion_matrix.sum(axis=1)
         macc = np.nanmean(acc)
@@ -112,7 +123,7 @@ class Evaluator(object):
         self.confusion_matrix += self._generate_matrix(gt_image, pre_image)
         self.bin_confusion_matrix += self._generate_matrix(gt_image, pre_image)
         if self.bin_count == self.bin_size:
-            _, bin_stdiou, bin_miou = self.compute_iou()
+            _, bin_stdiou, bin_miou = self.compute_bin_iou()
             self.bin_mious.append(bin_miou)
             self.bin_stdious.append(bin_stdiou)
             self.bin_confusion_matrix = np.zeros((self.num_class,) * 2)
@@ -122,7 +133,7 @@ class Evaluator(object):
 
     def calculate_results(self, ignore_class=-1):
         if self.bin_count > 0:
-            _, bin_stdiou, bin_miou = self.compute_iou()
+            _, bin_stdiou, bin_miou = self.compute_bin_iou()
             self.bin_mious.append(bin_miou)
             self.bin_stdious.append(bin_stdiou)
         if ignore_class != -1:

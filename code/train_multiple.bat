@@ -14,15 +14,18 @@
 @REM spatial_small_far_path =    r"..\datasets\spatial\SynthDet_groceries_spatial_realistic_far"
 @REM spatial_small_avg_path =    r"..\datasets\spatial\SynthDet_groceries_spatial_realistic_half"
 
-call create_dataset.bat C:\Users\Pasca\AppData\LocalLow\UnityTechnologies\SynthDet\solo_191 fgbg_orange_flat groceries
-call create_dataset.bat C:\Users\Pasca\AppData\LocalLow\UnityTechnologies\SynthDet\solo_192 fgbg_orange_object groceries
-call create_dataset.bat C:\Users\Pasca\AppData\LocalLow\UnityTechnologies\SynthDet\solo_194 fgbg_orange_texture groceries
-call create_dataset.bat C:\Users\Pasca\AppData\LocalLow\UnityTechnologies\SynthDet\solo_193 fgbg_orange_object_texture groceries
+cd UsefullnessOfDepth
 
-call create_dataset.bat C:\Users\Pasca\AppData\LocalLow\UnityTechnologies\SynthDet\solo_195 fgbg_green_flat groceries
-call create_dataset.bat C:\Users\Pasca\AppData\LocalLow\UnityTechnologies\SynthDet\solo_196 fgbg_green_texture groceries
-call create_dataset.bat C:\Users\Pasca\AppData\LocalLow\UnityTechnologies\SynthDet\solo_197 fgbg_green_object groceries
-call create_dataset.bat C:\Users\Pasca\AppData\LocalLow\UnityTechnologies\SynthDet\solo_198 fgbg_green_object_texture groceries
+call python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg_spacing_SF -c .\configs\SynthDet\SynthDet_foreground_background_test_pretrained_DL.py -mti 200 -mn rgb -m DeepLab
+
+call python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial_groceries_SF -dc groceries -c .\configs\SynthDet\SynthDet_spatial_test_pretrained_DL.py -mti 200 -mn rgb -m DeepLab
+
+@REM CMX
+call python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg_spacing_CMX -c .\configs\SynthDet\SynthDet_foreground_background_test_pretrained_CMX.py -mti 200 -mn rgbd -m CMX 
+
+call python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial_groceries_CMX -dc groceries -c .\configs\SynthDet\SynthDet_spatial_test_pretrained_CMX.py -mti 200 -mn rgbd -m CMX
+
+call python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness_groceries_CMX -dc groceries -c .\configs\SynthDet\SynthDet_robustness_test_pretrained_CMX.py -mn rgbd rgbd_variation -m CMX
 
 @REM call convert_and_train.bat . groceries_spatial_realistic_large groceries8 60 5 DFormer-Tiny
 

@@ -126,7 +126,7 @@ class ModelWrapper(nn.Module):
         else:
             output = self.model(x, x_e)
 
-        if not isinstance(output, tuple) and output.size()[-2:] != x.size()[-2:]:
+        if not isinstance(output, tuple) and not isinstance(output, list) and output.size()[-2:] != x.size()[-2:]:
             output = F.interpolate(output, size=x.size()[-2:], mode='bilinear', align_corners=False)
 
         return output
