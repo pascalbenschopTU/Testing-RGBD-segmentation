@@ -214,6 +214,7 @@ if __name__ == "__main__":
         log_file = os.path.join(args.checkpoint_dir, f"log_{date_time}.txt")
         with open(log_file, "w") as f:
             f.write("Log file for foreground background separation\n\n")
+            f.write(f"Arguments: {args}\n\n")
 
     for dataset_name in os.listdir(args.dataset_dir):
         dataset_train_file = os.path.join(args.dataset_dir, dataset_name, "train.txt")
@@ -240,8 +241,6 @@ if __name__ == "__main__":
             max_train_images=args.max_train_images,
         )
 
-        rgbd_aux_model_weights_file = model_files["rgbd_aux"]
-        rgbd_model_weights_file = model_files["rgbd"]
 
         # Train the models on the dataset with variations
         update_config(
@@ -272,6 +271,7 @@ if __name__ == "__main__":
                     x_e_channels=x_e_channels,
                     device=device,
                     create_confusion_matrix=False,
+                    ignore_background=True,
                 )
 
                 with open(log_file, "a") as f:

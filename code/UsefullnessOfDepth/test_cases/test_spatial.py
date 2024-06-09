@@ -194,6 +194,7 @@ if __name__ == "__main__":
         log_file = os.path.join(args.checkpoint_dir, f"log_{date_time}.txt")
         with open(log_file, "w") as f:
             f.write("Log file for spatial tests\n\n")
+            f.write(f"Arguments: {args}\n\n")
 
     for dataset_name in os.listdir(args.dataset_dir):
         dataset_train_file = os.path.join(args.dataset_dir, dataset_name, "train.txt")
