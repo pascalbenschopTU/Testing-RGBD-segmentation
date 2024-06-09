@@ -173,7 +173,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-mti", "--max_train_images",
         type=int,
-        default=500,
+        default=200,
         help="The maximum number of training images to use for training",
     )
     parser.add_argument(
@@ -211,6 +211,7 @@ if __name__ == "__main__":
         log_file = os.path.join(args.checkpoint_dir, f"log_{date_time}.txt")
         with open(log_file, "w") as f:
             f.write("Log file for robustness experiment\n\n")
+            f.write(f"Arguments: {args}\n\n")
 
     dataset_name = args.dataset_dir
 

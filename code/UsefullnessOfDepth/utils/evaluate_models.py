@@ -19,6 +19,7 @@ from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.dataloader.dataloader import get_val_loader, get_train_loader
 from utils.engine.logger import get_logger
 from utils.metrics_new import Metrics
+from utils.update_config import update_config
 
 
 class Evaluator(object):
@@ -150,18 +151,28 @@ class Evaluator(object):
     def reset(self):
         self.confusion_matrix = np.zeros((self.num_class,) * 2)
 
-def set_config_if_dataset_specified(config, dataset_location):
-    config.dataset_path = dataset_location
-    config.rgb_root_folder = os.path.join(config.dataset_path, 'RGB')
-    config.gt_root_folder = os.path.join(config.dataset_path, 'labels')
-    config.x_root_folder = os.path.join(config.dataset_path, 'Depth')
-    config.train_source = os.path.join(config.dataset_path, "train.txt")
-    config.eval_source = os.path.join(config.dataset_path, "test.txt")
+def set_config_if_dataset_specified(config_location, dataset_location):
+    # config.dataset_path = dataset_location
+    # config.rgb_root_folder = os.path.join(config.dataset_path, 'RGB')
+    # config.gt_root_folder = os.path.join(config.dataset_path, 'labels')
+    # config.x_root_folder = os.path.join(config.dataset_path, 'Depth')
+    # config.train_source = os.path.join(config.dataset_path, "train.txt")
+    # config.eval_source = os.path.join(config.dataset_path, "test.txt")
+    config = update_config(
+        config_location,
+        {
+            "dataset_path": dataset_location,
+        }
+    )
     return config
     
 logger = get_logger()
 def load_config(config, dataset=None, x_channels=-1, x_e_channels=-1):
     module_name = config.replace(".py", "").replace("\\", ".").lstrip(".")
+    
+    if dataset is not None:
+        config = set_config_if_dataset_specified(module_name, dataset)
+    
     config_module = importlib.import_module(module_name)
     config = config_module.config
     
@@ -169,8 +180,7 @@ def load_config(config, dataset=None, x_channels=-1, x_e_channels=-1):
         config.x_channels = x_channels
         config.x_e_channels = x_e_channels
 
-    if dataset is not None:
-        config = set_config_if_dataset_specified(config, dataset)
+    
     
     return config
 

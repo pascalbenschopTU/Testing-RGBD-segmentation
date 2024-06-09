@@ -9,6 +9,8 @@ pytorch-deeplab-xception/
 SynthDet/
 SynthDet_Pascal/
 src/
+TokenFusion/
+UniDepth/
 *.txt
 *.egg
 *.pyc

@@ -10,6 +10,9 @@ def update_config(config_location, variables_to_update={}):
     config = config_module.config
     config_file = config_module.__file__
 
+    # Remove keys where the value is None
+    variables_to_update = {key: value for key, value in variables_to_update.items() if value is not None}
+
     if "dataset_name" in variables_to_update:
         variables_to_update = get_dataset_details(variables_to_update)
 

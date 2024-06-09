@@ -130,7 +130,7 @@ def train_dformer(hyperparameters, config, train_dataset, num_epochs=5, train_ca
     )
     train_size = len(train_subset)
 
-    config.num_train_imgs = train_size
+    config.num_train_imgs = (train_size // config.batch_size) * config.batch_size
     config.checkpoint_step = 1
     config.checkpoint_start_epoch = 0
 

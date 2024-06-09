@@ -45,7 +45,7 @@ class RGBXDataset(data.Dataset):
         x_path = os.path.join(self._x_path, item_name.replace('.jpg','').replace('.png','')  + self._x_format)
         gt_path = os.path.join(self._gt_path, item_name.replace('.jpg','').replace('.png','')  + self._gt_format)
 
-        gt = self._open_image(gt_path, cv2.IMREAD_UNCHANGED, dtype=np.uint8)
+        gt = self._open_image(gt_path, cv2.IMREAD_GRAYSCALE, dtype=np.uint8)
         rgb = self._open_image(rgb_path, cv2.COLOR_BGR2RGB)
         x = self._open_image(x_path, cv2.IMREAD_GRAYSCALE)
 

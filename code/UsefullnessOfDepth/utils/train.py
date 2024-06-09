@@ -13,6 +13,8 @@ from torchvision.utils import make_grid
 from tensorboardX import SummaryWriter
 import numpy as np
 
+sys.path.append("../UsefullnessOfDepth")
+
 # Utils
 from utils.dataloader.dataloader import get_train_loader,get_val_loader
 from utils.dataloader.RGBXDataset import RGBXDataset
@@ -140,7 +142,7 @@ def train_model_from_config(config, **kwargs):
         val_loader = kwargs.get('val_loader')
 
     # Dont ignore the background class
-    criterion = nn.CrossEntropyLoss(reduction='mean')
+    criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background)
     BatchNorm2d = nn.BatchNorm2d
     
     base_lr = config.lr
@@ -163,6 +165,8 @@ def train_model_from_config(config, **kwargs):
         raise NotImplementedError
 
     config.niters_per_epoch = config.num_train_imgs // config.batch_size + 1
+    if is_tuning:
+        config.niters_per_epoch = config.num_train_imgs // config.batch_size
     total_iteration = config.nepochs * config.niters_per_epoch
     lr_policy = WarmUpPolyLR(base_lr, config.lr_power, total_iteration, config.niters_per_epoch * config.warm_up_epoch)
 
@@ -261,7 +265,7 @@ def train_model_from_config(config, **kwargs):
         tb.add_scalar('train/loss', sum_loss / len(pbar), epoch)
         tb.add_scalar('train/lr', lr, epoch)
 
-        if (epoch % config.checkpoint_step == 0 and epoch > int(config.checkpoint_start_epoch)):
+        if (epoch % config.checkpoint_step == 0 and epoch > int(config.checkpoint_start_epoch)) or epoch == config.nepochs:
             torch.cuda.empty_cache()
 
             with torch.no_grad():
@@ -344,7 +348,7 @@ def prepare_SynthDet_config(config_location, model, dataset_classes, x_channels,
 
     return new_config
 
-def prepare_SUNRGBD_config(config_location, x_channels, x_e_channels, num_epochs):
+def prepare_other_config(config_location, x_channels, x_e_channels, num_epochs):
     new_config = update_config(
         config_location, 
         { 
@@ -389,7 +393,7 @@ def run_hyperparameters(config_location, file_path, num_samples, num_hyperparame
 
 def train_model(config_location: str, 
                 checkpoint_dir: str="checkpoints", 
-                model: str="DFormer-Tiny", 
+                model: str=None, 
                 dataset_classes: str="random", 
                 num_hyperparameter_samples: int=20, 
                 num_hyperparameter_epochs: int=5, 
@@ -403,8 +407,8 @@ def train_model(config_location: str,
 
     if "SynthDet" in config_location:
         config = prepare_SynthDet_config(config_location, model, dataset_classes, x_channels, x_e_channels, num_epochs, dataset_name)
-    elif "SUNRGBD" in config_location:
-        config = prepare_SUNRGBD_config(config_location, x_channels, x_e_channels, num_epochs)
+    else:
+        config = prepare_other_config(config_location, x_channels, x_e_channels, num_epochs)
 
     config = update_config(
         config_location, 
@@ -456,7 +460,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         type=str,
-        default="DFormer",
+        default=None,
         help="The model to use for training the model, choose DFormer, CMX or DeepLab",
     )
     parser.add_argument(
@@ -472,19 +476,19 @@ if __name__ == "__main__":
         help="The type of dataset to use for training",
     )
     parser.add_argument(
-        "--num_hyperparameter_samples",
+        "-hs", "--num_hyperparameter_samples",
         type=int,
         default=10,
         help="The number of samples to use for hyperparameter tuning",
     )
     parser.add_argument(
-        "--num_hyperparameter_epochs",
+        "-he", "--num_hyperparameter_epochs",
         type=int,
         default=5,
         help="The number of epochs to use for hyperparameter tuning",
     )
     parser.add_argument(
-        "--num_epochs",
+        "-e", "--num_epochs",
         type=int,
         default=60,
         help="The number of epochs to use for hyperparameter tuning",
