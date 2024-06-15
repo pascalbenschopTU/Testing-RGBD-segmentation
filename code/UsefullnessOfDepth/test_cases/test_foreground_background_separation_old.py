@@ -249,7 +249,6 @@ if __name__ == "__main__":
                 dataset=os.path.join(args.dataset_dir, other_dataset_name),
                 x_channels=3,
                 x_e_channels=1,
-                ignore_background=True,
                 device=device,
             )
 
@@ -282,7 +281,6 @@ if __name__ == "__main__":
                 dataset=os.path.join(args.dataset_dir, other_dataset_name),
                 x_channels=3,
                 x_e_channels=3,
-                ignore_background=True,
                 device=device,
             )
 

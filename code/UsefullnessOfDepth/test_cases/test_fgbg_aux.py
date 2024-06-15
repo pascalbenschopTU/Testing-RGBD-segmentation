@@ -145,7 +145,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-hs", "--num_hyperparameter_samples",
         type=int,
-        default=15,
+        default=20,
         help="The number of samples to use for hyperparameter tuning",
     )
     parser.add_argument(
@@ -222,10 +222,6 @@ if __name__ == "__main__":
         if not os.path.exists(dataset_train_file) or os.path.getsize(dataset_train_file) == 0:
             continue
 
-        # Update the config with the dataset_name details
-        rgbd_model_weights_file = None
-        depth_model_weights_file = None
-        rgb_depth_preprocessed_weights_file = None
         # If there is a directory containing the dataset name in the checkpoint dir
         # Check if there are three directories starting with run
         # If there are, skip training the model

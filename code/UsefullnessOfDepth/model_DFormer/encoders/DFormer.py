@@ -168,10 +168,8 @@ class Block(nn.Module):
     def forward(self, x, x_e):
         res_x,res_e=x,x_e
         x,x_e=self.attn(x,x_e)
-
         
         x = res_x + self.dropout_layer(self.layer_scale_1.unsqueeze(0).unsqueeze(0) * x )
-
         
         x = x + self.dropout_layer(self.layer_scale_2.unsqueeze(0).unsqueeze(0) * self.mlp(x))
         if not self.drop_depth:

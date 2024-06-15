@@ -186,12 +186,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     date_time = time.strftime("%Y%m%d_%H%M%S")
 
-    config_location = args.config
-    if ".py" in config_location:
-        config_location = config_location.replace(".py", "")
-        config_location = config_location.replace("\\", ".")
-        while config_location.startswith("."):
-            config_location = config_location[1:]
+    config_location = args.config.replace(".py", "").replace("\\", ".").lstrip(".")
 
     # Load the config file
     config_module = importlib.import_module(config_location)
@@ -285,7 +280,6 @@ if __name__ == "__main__":
                     x_e_channels=x_e_channels,
                     device=device,
                     create_confusion_matrix=False,
-                    ignore_background=False,
                 )
 
                 with open(log_file, "a") as f:
@@ -329,7 +323,7 @@ if __name__ == "__main__":
                 x_channels = x_channels_map.get(model_name, 3)
                 x_e_channels = x_e_channels_map.get(model_name, 1)
 
-                miou_value, miou_bins = get_scores_for_model(
+                metric, _, _ = get_scores_for_model(
                     model=args.model,
                     config=config_location,
                     model_weights=model_weights_file,
@@ -339,14 +333,13 @@ if __name__ == "__main__":
                     device=device,
                     create_confusion_matrix=False,
                     bin_size=dataset_length,
-                    ignore_background=False,
                     return_bins=True,
                 )
 
                 light_angle = np.linspace(-110, 110, 11)
 
                 with open(log_file, "a") as f:
-                    for bin_index, bin_value in enumerate(miou_bins):
+                    for bin_index, bin_value in enumerate(metric.bin_mious):
                         f.write(
                             f"Property: Light angle Property value: {light_angle[bin_index]}\n"
                             f"{model_name.upper()} mIoU: {bin_value}\n"

@@ -109,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-m", "--model",
         type=str,
-        default="DFormer-Tiny",
+        default="DFormer",
         help="The model to use for training the model, choose DFormer, CMX or DeepLab",
     )
     parser.add_argument(
@@ -169,12 +169,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     date_time = time.strftime("%Y%m%d_%H%M%S")
 
-    config_location = args.config
-    if ".py" in config_location:
-        config_location = config_location.replace(".py", "")
-        config_location = config_location.replace("\\", ".")
-        while config_location.startswith("."):
-            config_location = config_location[1:]
+    config_location = args.config.replace(".py", "").replace("\\", ".").lstrip(".")
 
     # Load the config file
     config_module = importlib.import_module(config_location)

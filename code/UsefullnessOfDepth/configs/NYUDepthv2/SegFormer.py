@@ -19,7 +19,7 @@ C.abs_dir = osp.realpath(".")
 # Dataset config
 """Dataset Path"""
 C.dataset_name = 'NYUDepthv2'
-C.dataset_path = '.\\datasets\\NYUDepthv2\\'
+C.dataset_path = osp.join(C.root_dir, C.dataset_name)
 C.rgb_root_folder = osp.join(C.dataset_path, 'RGB')
 C.rgb_format = '.jpg'
 C.gt_root_folder = osp.join(C.dataset_path, 'Label')
@@ -36,7 +36,7 @@ C.is_test = True
 C.num_train_imgs = 795
 C.num_eval_imgs = 654
 C.num_classes = 41
-C.class_names =  ['wall','floor','cabinet','bed','chair','sofa','table','door','window','bookshelf','picture','counter','blinds',
+C.class_names =  ['bg', 'wall','floor','cabinet','bed','chair','sofa','table','door','window','bookshelf','picture','counter','blinds',
     'desk','shelves','curtain','dresser','pillow','mirror','floor mat','clothes','ceiling','books','refridgerator',
     'television','paper','towel','shower curtain','box','whiteboard','person','night stand','toilet',
     'sink','lamp','bathtub','bag','otherstructure','otherfurniture','otherprop']

@@ -32,24 +32,11 @@ class Evaluator(object):
         self.bin_confusion_matrix = np.zeros((self.num_class,)*2)
         self.bin_mious = []
         self.bin_stdious = []
-        
 
-    def Pixel_Accuracy(self):
-        Acc = np.diag(self.confusion_matrix).sum() / self.confusion_matrix.sum()
-        return Acc * 100
-
-    def Pixel_Accuracy_Class(self):
+    def compute_pixel_acc_class(self):
         Acc = np.diag(self.confusion_matrix) / self.confusion_matrix.sum(axis=1)
         Acc = np.nanmean(Acc)
         return Acc * 100
-    
-    def F1_Score(self):
-        TP = np.diag(self.confusion_matrix)
-        FP = self.confusion_matrix.sum(axis=0) - TP
-        FN = self.confusion_matrix.sum(axis=1) - TP
-        F1 = 2 * TP / (2 * TP + FP + FN)
-        F1 = np.nanmean(F1)
-        return F1 * 100 
     
     def compute_f1(self):
         TP = np.diag(self.confusion_matrix)
@@ -87,13 +74,6 @@ class Evaluator(object):
         macc = np.nanmean(acc)
         acc = acc[~np.isnan(acc)]
         return np.round(acc * 100, 2), np.round(macc * 100, 2)
-
-    def Mean_Intersection_over_Union(self):
-        IoU = np.diag(self.confusion_matrix) / (
-                    np.sum(self.confusion_matrix, axis=1) + np.sum(self.confusion_matrix, axis=0) -
-                    np.diag(self.confusion_matrix))
-        MIoU = np.nanmean(IoU)
-        return MIoU * 100
     
     def Mean_Intersection_over_Union_non_zero(self):
         MIoU = np.diag(self.confusion_matrix) / (
@@ -113,7 +93,7 @@ class Evaluator(object):
         return FWIoU * 100
 
     def _generate_matrix(self, gt_image, pre_image):
-        mask = (gt_image >= 0) & (gt_image < self.num_class)
+        mask = (gt_image >= 0) & (gt_image < self.num_class) & (gt_image != self.ignore_index)
         label = self.num_class * gt_image[mask].astype('int') + pre_image[mask]
         count = np.bincount(label, minlength=self.num_class**2)
         confusion_matrix = count.reshape(self.num_class, self.num_class)
@@ -132,7 +112,11 @@ class Evaluator(object):
         else:
             self.bin_count += 1
 
-    def calculate_results(self, ignore_class=-1):
+    def calculate_results(self, ignore_class=-1, ignore_zero=False):
+        # if zeros in the confusion matrix add a very small value to avoid division by zero
+        if np.any(np.sum(self.confusion_matrix, axis=1) == 0):
+            self.confusion_matrix += np.eye(self.num_class) * 1e-32
+
         if self.bin_count > 0:
             _, bin_stdiou, bin_miou = self.compute_bin_iou()
             self.bin_mious.append(bin_miou)
@@ -141,27 +125,27 @@ class Evaluator(object):
             self.confusion_matrix = np.delete(self.confusion_matrix, ignore_class, axis=0)
             self.confusion_matrix = np.delete(self.confusion_matrix, ignore_class, axis=1)
 
+        if ignore_zero:
+            # calculate iou, pixel acc, f1, etc. without classes that have no occurrences
+            non_zero_classes = np.any(self.confusion_matrix != 0, axis=1)
+            self.confusion_matrix = self.confusion_matrix[non_zero_classes, :]
+            self.confusion_matrix = self.confusion_matrix[:, non_zero_classes]
+
         self.ious, self.iou_std, self.miou = self.compute_iou()
         self.acc, self.macc = self.compute_pixel_acc()
-        self.mf1 = self.F1_Score()
-        self.pixel_acc_class = self.Pixel_Accuracy_Class()
+        self.f1, self.mf1 = self.compute_f1()
+        self.pixel_acc_class = self.compute_pixel_acc_class()
         self.fwiou = self.Frequency_Weighted_Intersection_over_Union()
 
 
     def reset(self):
         self.confusion_matrix = np.zeros((self.num_class,) * 2)
 
-def set_config_if_dataset_specified(config_location, dataset_location):
-    # config.dataset_path = dataset_location
-    # config.rgb_root_folder = os.path.join(config.dataset_path, 'RGB')
-    # config.gt_root_folder = os.path.join(config.dataset_path, 'labels')
-    # config.x_root_folder = os.path.join(config.dataset_path, 'Depth')
-    # config.train_source = os.path.join(config.dataset_path, "train.txt")
-    # config.eval_source = os.path.join(config.dataset_path, "test.txt")
+def set_config_if_dataset_specified(config_location, dataset_name):
     config = update_config(
         config_location,
         {
-            "dataset_path": dataset_location,
+            "dataset_name": dataset_name,
         }
     )
     return config
@@ -185,15 +169,15 @@ def load_config(config, dataset=None, x_channels=-1, x_e_channels=-1):
     return config
 
 def initialize_model(config, model_weights, device):
-    criterion = nn.CrossEntropyLoss(reduction='mean')
+    criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background)
     BatchNorm2d = nn.BatchNorm2d
 
     model = ModelWrapper(config, criterion=criterion, norm_layer=BatchNorm2d, pretrained=True)
     
     try:
         weight = torch.load(model_weights)['model']
-        logger.info(f'load model {config.backbone} weights : {model_weights}')
         model.load_state_dict(weight, strict=False)
+        logger.info(f'load model {config.backbone} weights : {model_weights}')
     except Exception as e:
         logger.error(f"Invalid model weights file: {model_weights}. Error: {e}")
     
@@ -248,23 +232,22 @@ def get_scores_for_model(
         config, 
         model_weights, 
         dataset=None, 
-        bin_size=1000, 
-        ignore_background=False, 
-        background_only=False,
+        bin_size=1000,
         x_channels=-1,
         x_e_channels=-1, 
         results_file="results.txt",
         device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         create_confusion_matrix=True,
-        return_bins=False
+        ignore_background=False,
+        return_metrics=False
     ):
     print("device: ", device)
 
     # Load and configure model
     config = load_config(config, dataset, x_channels, x_e_channels)
 
-    if not ignore_background:
-        config.background = -1
+    if ignore_background:
+        config.background = 0
 
     # Initialize model
     model = initialize_model(config, model_weights, device)
@@ -278,7 +261,6 @@ def get_scores_for_model(
         config=config,
         device=device,
         bin_size=bin_size,
-        ignore_background=ignore_background
     )
 
     miou = metric.miou
@@ -292,36 +274,30 @@ def get_scores_for_model(
     model_results_file = os.path.join(model_weights_dir, results_file)
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    rgb_miou=rgb_metric.miou if rgb_metric else None, 
-    depth_miou=depth_metric.miou if depth_metric else None
-    if rgb_miou is not None and depth_miou is not None:
-        miou = [miou, rgb_miou, depth_miou]
+    extra_metrics = [metric.miou for metric in (rgb_metric, depth_metric) if metric is not None]
+    if len(extra_metrics) > 0:
+        miou = [miou] + extra_metrics
 
     save_results(model_results_file, metric, num_params, rgb_metric, depth_metric)
 
-    if return_bins:
-        return miou, metric.bin_mious
+    if return_metrics:
+        return metric, rgb_metric, depth_metric
     return miou
    
             
 @torch.no_grad()
-def evaluate(model, dataloader, config, device, bin_size=1, ignore_background=False):
+def evaluate(model, dataloader, config, device, bin_size=1):
     model.eval()
     n_classes = config.num_classes
-    if not ignore_background:
-        config.background = -1
     # metrics = Metrics(n_classes, config.background - 100, device)
     evaluator = Evaluator(n_classes, bin_size=bin_size, ignore_index=config.background)
 
     rgb_evaluator = None
     depth_evaluator = None
 
-    if model.is_token_fusion:
+    if model.is_token_fusion or config.get('use_aux', False):
         rgb_evaluator = Evaluator(n_classes, bin_size=bin_size, ignore_index=config.background)
         depth_evaluator = Evaluator(n_classes, bin_size=bin_size, ignore_index=config.background)
-
-    mious = []
-    iou_stds = []
 
     for i, minibatch in enumerate(tqdm(dataloader, dynamic_ncols=True)):
         images = minibatch["data"][0]
@@ -343,6 +319,11 @@ def evaluate(model, dataloader, config, device, bin_size=1, ignore_background=Fa
 
             preds = preds[2] # Ensemble
 
+        if config.get('use_aux', False):
+            preds, aux_preds = preds[0], preds[1]
+            binary_labels = (labels > 0).long()
+            rgb_evaluator.add_batch(binary_labels.cpu().numpy(), aux_preds.softmax(1).argmax(1).cpu().numpy())
+
         preds = preds.softmax(dim=1)
 
         # metrics.update(preds, labels)
@@ -356,51 +337,6 @@ def evaluate(model, dataloader, config, device, bin_size=1, ignore_background=Fa
     return evaluator, rgb_evaluator, depth_evaluator
 
 
-@torch.no_grad()
-def evaluate_torch(model, dataloader, config, device, ignore_class=-1):
-    print("Evaluating...")
-    model.eval()
-    n_classes = config.num_classes
-    metrics = [Metrics(n_classes, ignore_class, device)]
-    if model.is_token_fusion:
-        metrics = [Metrics(n_classes, ignore_class, device) for _ in range(model.model.num_parallel + 1)]
-
-    use_aux = config.get('use_aux', False)
-
-    # Additional metrics for auxiliary branch, if present
-    if use_aux:
-        aux_metrics = Metrics(2, ignore_class, device)
-        metrics.append(aux_metrics)
-
-    for minibatch in tqdm(dataloader, dynamic_ncols=True):
-        images = minibatch["data"][0]
-        labels = minibatch["label"][0]
-        modal_xs = minibatch["modal_x"][0]
-        if len(labels.shape) == 2:
-            labels = labels.unsqueeze(0)
-        
-        images = [images.to(device), modal_xs.to(device)]
-        labels = labels.to(device)
-        
-        outputs = model(images[0], images[1])
-        if use_aux:
-            preds, aux_preds = outputs[0], outputs[1]
-            binary_labels = (labels > 0).long()
-            metrics[1].update(aux_preds.softmax(dim=1), binary_labels)
-        else:
-            preds = outputs
-
-        if isinstance(preds, list):
-            preds, masks = preds[0], preds[1]
-            metrics[0].update(preds[2].softmax(dim=1), labels) # Ensemble
-            metrics[1].update(preds[0].softmax(dim=1), labels) # RGB
-            metrics[2].update(preds[1].softmax(dim=1), labels) # Depth
-        else:
-            metrics[0].update(preds.softmax(dim=1), labels)
-
-    return metrics
-
-
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
     argparser.add_argument('-c', '--config', help='train config file path')
@@ -409,8 +345,7 @@ if __name__ == '__main__':
 
     argparser.add_argument('-m', '--model', help='Model name', default='DFormer-Tiny')
     argparser.add_argument('-b', '--bin_size', help='Bin size for testing', default=1000, type=int)
-    argparser.add_argument('-ib', '--ignore_background', action='store_true', help='Ignore background class')
-    argparser.add_argument('-bo', '--background_only', action='store_true', help='Evaluate only background class')
+    # argparser.add_argument('-ib', '--ignore_background', action='store_true', help='Ignore background class')
 
     argparser.add_argument('-xc', '--x_channels', help='Number of channels in X', default=-1, type=int)
     argparser.add_argument('-xec', '--x_e_channels', help='Number of channels in X_e', default=-1, type=int)
@@ -423,8 +358,6 @@ if __name__ == '__main__':
         model=args.model,
         dataset=args.dataset,
         bin_size=args.bin_size,
-        ignore_background=args.ignore_background,
-        background_only=args.background_only,
         x_channels=args.x_channels,
         x_e_channels=args.x_e_channels
     )

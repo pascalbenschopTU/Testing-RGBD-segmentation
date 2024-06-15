@@ -33,6 +33,11 @@ SegFormer
 python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial_groceries_SF -dc groceries -c .\configs\SynthDet\SynthDet_spatial_test_pretrained_SF.py -mti 200 -mn rgb -m SegFormer
 ```
 
+CMX
+```
+python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial_groceries_CMX -dc groceries -c .\configs\SynthDet\SynthDet_spatial_test_pretrained_CMX.py -mti 200 -mn rgb -m CMX
+```
+
 
 # Robustness
 
@@ -51,16 +56,29 @@ SegFormer
 python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness_groceries_SF -dc groceries -c .\configs\SynthDet\SynthDet_robustness_test_pretrained_SF.py -mn rgb rgb_variation -m SegFormer
 ```
 
-
-### Random
+DeepLab
 ```
-python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_rgb -chdir checkpoints_robustness_pretrained
--dc random -he 0 -e 30 -c .\configs\SynthDet\SynthDet_robustness_test_pretrained.py
+python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness_groceries_DL -dc groceries -c .\configs\SynthDet\SynthDet_robustness_test_pretrained_DL.py -mn rgb rgb_variation -m DeepLab
+```
 
-python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_red_green_blue_gems\ -chdir checkpoints_robustness -dc random -he 3 -e 30 -c .\configs\SynthDet\SynthDet_robustness_test.py
+CMX
+```
+python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness_groceries_CMX -dc groceries -c .\configs\SynthDet\SynthDet_robustness_test_pretrained_CMX.py -mn rgbd rgbd_variation -m CMX
+
+```
 
 
-python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness_groceries -dc random -c .\configs\SynthDet\SynthDet_robustness_test.py
+### NYUDV2
 
-python .\test_cases\test_robustness_TF.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness_groceries_non_rot_TF -dc groceries -c .\configs\SynthDet\SynthDet_robustness_test_pretrained_TF.py -m TokenFusion -l G:\mscPascalBenschop\code\UsefullnessOfDepth\checkpoints_robustness_groceries_non_rot_TF\log_20240602_111554.txt
+Foreground background tests on NYUDv2
+```
+python .\test_cases\test_fgbg_NYUDV2.py -c .\configs\NYUDepthv2\DFormer_Base.py -tc .\configs\NYUDepthv2\DFormer_Base_test.py -mw .\checkpoints\NYUDepthv2_DFormer-Base\run_20240607-111847\epoch_100_miou_46.619.pth -m DFormer -chdir checkpoints_fgbg_NYUDV2 -bgdp .\datasets\background\ -redp .\datasets\NYUDepthv3\
+
+python .\test_cases\test_fgbg_NYUDV2.py -c .\configs\NYUDepthv2\SegFormer.py -tc .\configs\NYUDepthv2\SegFormer_test.py -mw .\checkpoints\NYUDepthv2_MiT-B2\run_20240606-222137\epoch_100_miou_42.286.pth -m SegFormer -chdir checkpoints_fgbg_NYUDV2 -bgdp .\datasets\background\ -redp .\datasets\NYUDepthv3\
+```
+
+Spatial tests for depth_deviation (-dd) 0.05, 0.1, 0.2
+
+```
+python .\utils\adapt_dataset_and_test.py -op .\datasets\NYUDepthv2\Depth_original\ -dp .\datasets\NYUDepthv2\Depth\ -cfg .\configs\NYUDepthv2\DFormer_Base.py -mw .\checkpoints\NYUDepthv2_DFormer-Base\run_20240607-111847\epoch_100_miou_46.619.pth -m DFormer -bs 1000 -pname depth_level -pmin 0.0 -pmax 1.0 -s empty -dd 0.1
 ```

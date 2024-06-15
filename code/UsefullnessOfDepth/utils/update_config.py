@@ -14,7 +14,7 @@ def update_config(config_location, variables_to_update={}):
     variables_to_update = {key: value for key, value in variables_to_update.items() if value is not None}
 
     if "dataset_name" in variables_to_update:
-        variables_to_update = get_dataset_details(variables_to_update)
+        variables_to_update = get_dataset_details(variables_to_update, config)
 
     # Read the original file and update the variables
     with open(config_file, 'r') as original_file:
@@ -52,7 +52,7 @@ def update_config(config_location, variables_to_update={}):
     return config
 
 
-def get_dataset_details(variables_to_update):
+def get_dataset_details(variables_to_update, config):
     dataset_name = variables_to_update["dataset_name"]
     # Walk the datasets folder and find the dataset location
     if os.path.exists(dataset_name):
@@ -77,7 +77,9 @@ def get_dataset_details(variables_to_update):
     if dataset_location is None:
         raise FileNotFoundError(f"Dataset {dataset_name} not found in datasets folder")
 
-    RGB_files_location = os.path.join(dataset_location, 'RGB')
+    # Get the base dir from the path
+    rgb_dir = os.path.basename(os.path.normpath(config.rgb_root_folder))
+    RGB_files_location = os.path.join(dataset_location, rgb_dir)
     # Count the amount of files starting with 'train' and 'test'
     train_files = [f for f in os.listdir(RGB_files_location) if f.startswith('train')]
     test_files = [f for f in os.listdir(RGB_files_location) if f.startswith('test')]
@@ -87,8 +89,8 @@ def get_dataset_details(variables_to_update):
 
     # In a one liner, go over all .png files in the label folder, get the unique classes by getting the unique values of pixels in the image
     classes = set(pixel for f in label_files for pixel in set(cv2.imread(os.path.join(label_files_location, f), cv2.IMREAD_UNCHANGED).flatten().tolist()))
-    variables_to_update["num_classes"] = len(classes)
-    variables_to_update["class_names"] = [f"class_{i}" for i in range(len(classes))]
+    # variables_to_update["num_classes"] = len(classes)
+    # variables_to_update["class_names"] = [f"class_{i}" for i in range(len(classes))]
 
     variables_to_update["num_train_imgs"] = len(train_files)
     variables_to_update["num_eval_imgs"] = len(test_files)

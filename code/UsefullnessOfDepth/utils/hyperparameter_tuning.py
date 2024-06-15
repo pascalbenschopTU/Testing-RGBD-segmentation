@@ -114,7 +114,6 @@ def train_dformer(hyperparameters, config, train_dataset, num_epochs=5, train_ca
     config.momentum = hyperparameters["momentum"]
     config.weight_decay = hyperparameters["weight_decay"]
     config.batch_size = hyperparameters["batch_size"]
-    config.optimizer = hyperparameters["optimizer"]
     config.nepochs = num_epochs
     config.warm_up_epoch = 1
 
@@ -183,11 +182,11 @@ def tune_hyperparameters(config, num_samples=20, max_num_epochs=5, cpus_per_tria
         "lr_power": tune.uniform(0.8, 1.0),
         "momentum": tune.uniform(0.9, 0.99),
         "weight_decay": tune.loguniform(1e-4, 1e-2),
-        "optimizer": tune.choice(["AdamW", "SGDM"]),
     }
 
-    large_models = ["mit_b2", "xception", "mit_b3"]
-    if config.backbone in large_models:
+    model = config.get("model", None)
+    large_models = ["mit_b2", "xception", "mit_b3", "DFormer-Base", "TokenFusion"]
+    if config.backbone in large_models or model in large_models:
         param_space["batch_size"] = tune.choice([4, 8])
     extra_large_models = ["DFormer-Large"]
     if config.backbone in extra_large_models:

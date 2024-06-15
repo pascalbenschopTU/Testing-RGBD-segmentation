@@ -183,14 +183,21 @@ def make_predictions(
                 ax[0, 4].axis("off")
 
             # Show classes of interest in the label / target_tensor
+            final_mask = np.zeros_like(target_tensor[0].detach().cpu().numpy())
             for i, class_of_interest in enumerate(classes_of_interest):
-                mask = np.where(target_tensor[0].detach().cpu().numpy() == class_of_interest, 1, 0)
+                mask = np.where(target_tensor[0].detach().cpu().numpy() == class_of_interest, i, 0)
                 if np.sum(mask) < 1000:
                     continue
-                print(f"Category {class_of_interest} with num_pixels: {np.sum(mask)}")
-                ax[1, i].imshow(mask, cmap="gray")
-                ax[1, i].set_title(f"Class {class_names[class_of_interest]}")
-                ax[1, i].axis("off")
+
+
+                final_mask += mask
+
+                # mask = np.where(mask == 1, 255, 0)
+
+            ax[1, 0].imshow(final_mask, cmap="viridis")
+            ax[1, 0].set_title("Ground Truth Classes of Interest")
+            ax[1, 0].axis("off")
+
 
             plt.tight_layout()
             plt.show()

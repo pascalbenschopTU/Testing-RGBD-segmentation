@@ -19,7 +19,7 @@ sys.path.append("../UsefullnessOfDepth")
 from utils.dataloader.dataloader import get_train_loader,get_val_loader
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.lr_policy import WarmUpPolyLR
-from utils.evaluate_models import evaluate_torch
+from utils.evaluate_models import evaluate, save_results
 from utils.hyperparameter_tuning import tune_hyperparameters
 from utils.update_config import update_config
 from utils.model_wrapper import ModelWrapper
@@ -271,20 +271,23 @@ def train_model_from_config(config, **kwargs):
             with torch.no_grad():
                 model.eval()
                 device = torch.device('cuda')
-                metrics = evaluate_torch(model, val_loader, config, device, ignore_class=config.background)
-                ious, miou = metrics[0].compute_iou()
-                acc, macc = metrics[0].compute_pixel_acc()
-                f1, mf1 = metrics[0].compute_f1()
+                # metrics = evaluate_torch(model, val_loader, config, device, ignore_class=config.background)
+                metrics, rgb_metrics, depth_metrics = evaluate(model, val_loader, config, device, bin_size=1000)
+                # ious, miou = metrics[0].compute_iou()
+                # acc, macc = metrics[0].compute_pixel_acc()
+                # f1, mf1 = metrics[0].compute_f1()
+                miou = metrics.miou
                 mious = [miou]
-                print('macc: ', macc, 'mf1: ', mf1, 'miou: ',miou)
+                print('macc: ', metrics.macc, 'mf1: ', metrics.mf1, 'miou: ', metrics.miou)
                 if use_aux:
-                    ious_aux, miou_aux = metrics[1].compute_iou()
-                    mious = [miou, miou_aux]
-                    print('aux_miou: ', miou_aux)
+                    aux_miou = rgb_metrics.miou
+                    mious.append(aux_miou)
+                    print('aux_miou: ', aux_miou)
                 if model.is_token_fusion:
-                    _, rgb_miou = metrics[1].compute_iou()
-                    _, depth_miou = metrics[2].compute_iou()
-                    mious = [miou, rgb_miou, depth_miou]
+                    rgb_miou = rgb_metrics.miou
+                    depth_miou = depth_metrics.miou
+                    mious.append(rgb_miou)
+                    mious.append(depth_miou)
                     print('rgb_miou: ', rgb_miou, 'depth_miou: ', depth_miou)
 
                 if not is_tuning:
@@ -293,15 +296,16 @@ def train_model_from_config(config, **kwargs):
                         print('saving model...')
                         save_checkpoint(model, optimizer, epoch, current_idx, os.path.join(config.log_dir, f"epoch_{epoch}_miou_{miou}.pth"))
                     
-                    result_line = f'acc: {acc}, macc: {macc}, f1: {f1}, mf1: {mf1}, ious: {ious}, mious: {mious}\n'
-                    with open(config.log_dir + '/results.txt', 'a') as file:
-                        file.write(result_line)
+                    # result_line = f'acc: {metrics.acc}, macc: {metrics.macc}, f1: {metrics.f1}, mf1: {metrics.mf1}, ious: {metrics.ious}, mious: {mious}\n'
+                    # with open(config.log_dir + '/results.txt', 'a') as file:
+                    #     file.write(result_line)
+                    save_results(config.log_dir + '/results.txt', metrics, 0, rgb_metrics, depth_metrics)
                 
-                tb.add_scalar('val/macc', macc, epoch)
-                tb.add_scalar('val/mf1', mf1, epoch)
+                tb.add_scalar('val/macc', metrics.macc, epoch)
+                tb.add_scalar('val/mf1', metrics.mf1, epoch)
                 tb.add_scalar('val/miou', miou, epoch)
 
-                del metrics, ious, acc, macc, f1, mf1
+                del metrics, rgb_metrics, depth_metrics
 
             ray_callback = kwargs.get('ray_callback', None)
             if ray_callback is not None:
@@ -328,12 +332,15 @@ def save_checkpoint(model, optimizer, epoch, iteration, path):
     torch.save(state_dict, path)
 
 def prepare_SynthDet_config(config_location, model, dataset_classes, x_channels, x_e_channels, num_epochs, dataset_name=None):
-    config_path = config_location
-    model_name = model.split('-')[0]
     if dataset_name is None:
-        dataset_name = config_path.split('SynthDet.')[-1].split(f"_{model_name}")[0]
-        if "Dformer" in dataset_name:
-            dataset_name = dataset_name.split(f"_{model_name}")[0]
+        return update_config(
+            {
+                "classes": dataset_classes,
+                "x_channels": x_channels,
+                "x_e_channels": x_e_channels,
+                "nepochs": num_epochs,
+            }
+        )
     
     new_config = update_config(
         config_location, 

@@ -8,6 +8,8 @@ import random
 from utils.transforms import generate_random_crop_pos, random_crop_pad_to_shape, normalize
 
 def resize_image(image, size):
+    if not image.dtype == np.uint8 or not image.dtype == np.float32:
+        image = image.astype(np.float32)
     return cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)
 
 def random_mirror(rgb, gt, modal_x):

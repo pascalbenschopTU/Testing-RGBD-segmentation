@@ -6,6 +6,11 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import argparse
 import importlib
+import sys
+# Import partial
+from functools import partial
+
+sys.path.append('../UsefullnessOfDepth')
 
 from utils.evaluate_models import get_scores_for_model
 from utils.update_config import update_config
@@ -13,9 +18,10 @@ from utils.update_config import update_config
 def adapt_dataset(origin_directory_path, destination_directory_path, property_value, adaptation_method, split):
     paths = [os.path.join(origin_directory_path, file) for file in os.listdir(origin_directory_path) if file.startswith(split)]
     destination_paths = [os.path.join(destination_directory_path, file) for file in os.listdir(origin_directory_path) if file.startswith(split)]
-    paths.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
-    destination_paths.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
-                           
+    if split != "":
+        paths.sort(key=lambda x: int(x.split(split)[-1].split('.')[0]))
+        destination_paths.sort(key=lambda x: int(x.split(split)[-1].split('.')[0]))
+
     # Initialize the progress bar
     progress_bar = tqdm(total=len(paths), desc=f'Processing files in {origin_directory_path}')
     print("Property value: ", property_value)
@@ -56,12 +62,24 @@ def adjust_brightness(image_path, destination_path, brightness_factor):
 
     return brightness_factor
 
-def adjust_depth_level(image_path, destination_path, depth_level):
+def adjust_depth_level(image_path, destination_path, depth_level, depth_range=0.1):
     depth_image = Image.open(image_path)
     depth_image = np.array(depth_image)
     min_depth = np.min(depth_image)
     max_depth = np.max(depth_image)
-    depth_image = np.clip(depth_image + (depth_level * (max_depth - min_depth)), min_depth, max_depth).astype(np.uint8)
+
+    # Normalize to [0, 1]
+    normalized_depth_image = (depth_image - min_depth) / (max_depth - min_depth)
+
+    # Scale to the desired depth level
+    min_depth = 0
+    max_depth = 1 - depth_range
+    scaled_depth_image = normalized_depth_image * depth_range + min(max_depth, max(min_depth, depth_level))
+
+    depth_image = np.clip(scaled_depth_image * 255, 0, 255)
+
+    # Convert to uint8
+    depth_image = depth_image.astype(np.uint8)
 
     depth_image = Image.fromarray(depth_image)
     depth_image = depth_image.convert("L")
@@ -72,8 +90,7 @@ def adjust_depth_level(image_path, destination_path, depth_level):
     return depth_level
 
 
-
-def adapt_property(origin_directory_path, destination_directory_path, property_value, property_name, split):
+def adapt_property(origin_directory_path, destination_directory_path, property_value, property_name, split, depth_range=0.1):
     if property_name == "saturation":
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_saturation, split)
     if property_name == "hue":
@@ -81,7 +98,8 @@ def adapt_property(origin_directory_path, destination_directory_path, property_v
     if property_name == "brightness":
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_brightness, split)
     if property_name == "depth_level":
-        adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_depth_level, split)
+        adjust_depth_level_func = partial(adjust_depth_level, depth_range=depth_range)
+        adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_depth_level_func, split)
 
 
 def test_property_shift(
@@ -91,9 +109,10 @@ def test_property_shift(
         property_name, 
         origin_directory_path,
         destination_directory_path,
-        model="DFormer-Tiny", 
+        model="DFormer", 
         split="test", 
-        device="cuda"
+        device="cuda",
+        args=None
     ):
     model_weights_dir = os.path.dirname(model_weights)
     results_file_name = f"{property_name}_tests.txt"
@@ -103,26 +122,21 @@ def test_property_shift(
         result_file.write(f"Property values: {property_values}\n")
         result_file.write(f"Model: {model}\n")
         result_file.write(f"Config: {config}\n")
-        result_file.write(f"Dataset: {origin_directory_path}\n")
+        result_file.write(f"Args: {args}\n")
         result_file.write("\n")
 
     miou_values = []
 
     for property_value in property_values:
-        adapt_property(origin_directory_path, destination_directory_path, property_value, property_name, split)
-        config_module = importlib.import_module(config)
-        config = config_module.config
+        adapt_property(origin_directory_path, destination_directory_path, property_value, property_name, split, depth_range=args.depth_range)
 
-        # get_scores_for_model(args, results_file_name)
         miou = get_scores_for_model(
             model=model,
             config=config,
             model_weights=model_weights,
-            dataset=destination_directory_path,
-            x_channels=3,
-            x_e_channels=1,
-            ignore_background=True,
-            results_file=model_results_file,
+            x_channels=getattr(args, "x_channels", 3),
+            x_e_channels=getattr(args, "x_e_channels", 1),
+            results_file=results_file_name,
             device=device,
             create_confusion_matrix=False,
         )
@@ -132,45 +146,24 @@ def test_property_shift(
     return property_values, miou_values
 
     
-def update_config_with_model(args):
-    config_module = importlib.reload(importlib.import_module(args.config))
-    config = config_module.config
-
-    if args.model == "DFormer-Tiny":
-        config.decoder = "ham"
-        config.backbone = "DFormer-Tiny"
-    if args.model == "DFormer-Large":
-        config.decoder = "ham"
-        config.backbone = "DFormer-Large"
-        config.drop_path_rate = 0.2
-    if args.model == "CMX_B2":
-        config.decoder = "MLPDecoder"
-        config.backbone = "mit_b2"
-    if args.model == "DeepLab":
-        config.backbone = "xception"
-
-    update_config(
-        args.config, 
-        {
-            "backbone": config.backbone,
-            "decoder": config.decoder,
-        }
-    )
 
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     argparser.add_argument("-op", "--origin_directory_path", type=str, default="datasets/SUNRGBD/RGB_original", help="The path to the SUNRGBD dataset")
     argparser.add_argument("-dp", "--destination_directory_path", type=str, default="datasets/SUNRGBD/RGB", help="The path to save the adapted dataset")
-    argparser.add_argument("-s", "--split", type=str, default="test", help="The split to consider", choices=["train", "test"])
+    argparser.add_argument("-s", "--split", type=str, default="test", help="The split to adapt")
     argparser.add_argument("-cfg", '--config', help='train config file path')
     argparser.add_argument("-mw", '--model_weights', help='File of model weights')
-    argparser.add_argument("-m", '--model', help='Model name', default='DFormer-Tiny')
+    argparser.add_argument("-m", '--model', help='Model name', default='DFormer')
     argparser.add_argument("-bs", '--bin_size', help='Bin size for testing', default=1, type=int)
     argparser.add_argument("-pname", '--property_name', help='Property name', default='saturation')
     argparser.add_argument("-pmin", '--min_property_value', help='Minimum property value', default=-1.0, type=float)
     argparser.add_argument("-pmax", '--max_property_value', help='Maximum property value', default=-1.0, type=float)
     argparser.add_argument("-pvr", '--property_value_range', help='Property value range', default=10, type=int)
+    argparser.add_argument("-dr", "--depth_range", help="Range of depth", default=0.1, type=float)
+    argparser.add_argument("-xch", "--x_channels", help="Number of input channels", default=3, type=int)
+    argparser.add_argument("-xech", "--x_e_channels", help="Number of input channels", default=1, type=int)
 
     args = argparser.parse_args()
 
@@ -183,16 +176,19 @@ if __name__ == "__main__":
 
     args.config = module_name
 
-    update_config_with_model(args)
-
     if args.config is not None:
         property_values = np.linspace(args.min_property_value, args.max_property_value, args.property_value_range)
         if args.property_name == "saturation" and args.min_property_value == -1.0 and args.max_property_value == -1.0:
-            property_values = np.linspace(0.01, 3.0, 10)
+            property_values = np.linspace(0.001, 2.0, 11)
         if args.property_name == "hue" and args.min_property_value == -1.0 and args.max_property_value == -1.0:
             property_values = np.linspace(-0.5, 0.5, 11)
         if args.property_name == "brightness" and args.min_property_value == -1.0 and args.max_property_value == -1.0:
-            property_values = np.linspace(0.01, 3.0, 10)
+            property_values = np.linspace(0.001, 2.0, 11)
+        if args.property_name == "depth_level" and args.min_property_value == -1.0 and args.max_property_value == -1.0:
+            property_values = np.linspace(0.0, 0.9, 10)
+
+        if args.split == "empty":
+            args.split = ""
 
         test_property_shift(
             config=args.config, 
@@ -203,7 +199,8 @@ if __name__ == "__main__":
             destination_directory_path=args.destination_directory_path, 
             model=args.model, 
             split=args.split, 
-            device="cuda"
+            device="cuda",
+            args=args
         )
 
         
