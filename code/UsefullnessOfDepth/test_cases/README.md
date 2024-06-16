@@ -82,3 +82,17 @@ Spatial tests for depth_deviation (-dd) 0.05, 0.1, 0.2
 ```
 python .\utils\adapt_dataset_and_test.py -op .\datasets\NYUDepthv2\Depth_original\ -dp .\datasets\NYUDepthv2\Depth\ -cfg .\configs\NYUDepthv2\DFormer_Base.py -mw .\checkpoints\NYUDepthv2_DFormer-Base\run_20240607-111847\epoch_100_miou_46.619.pth -m DFormer -bs 1000 -pname depth_level -pmin 0.0 -pmax 1.0 -s empty -dd 0.1
 ```
+
+Test cases for adjusting background manually:
+
+```
+python .\utils\adjust_background_dataset.py -bgdp .\datasets\background\ -redp .\datasets\NYUDepthv3\ -c .\configs\NYUDepthv2\DFormer_Base.py -cl 31
+
+python .\utils\adjust_background_dataset.py -bgdp .\datasets\background\ -redp .\datasets\NYUDepthv4\ -c .\configs\NYUDepthv2\DFormer_Base.py -cl 31 -o
+```
+
+And Predicting examples
+
+```
+python .\utils\create_predictions.py --model DFormer --config .\configs\NYUDepthv2\DFormer_Base_test.py --model_weights .\checkpoints\NYUDepthv2_DFormer-Base\run_20240607-111847\epoch_100_miou_46.619.pth --ignore_background --prediction_folder predictions -sc 14 --dataset .\datasets\NYUDepthv4\
+```

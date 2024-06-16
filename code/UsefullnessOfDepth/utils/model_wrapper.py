@@ -117,12 +117,7 @@ class ModelWrapper(nn.Module):
         
         # Check if self.model has a forward function that accepts only x or also x_e
         if self.is_rgb_model:
-            if self.config.x_channels == 1:
-                # Repeat the grayscale image to 3 channels
-                x_e = x_e.repeat(1, 3, 1, 1)
-                output = self.model(x_e)
-            else:
-                output = self.model(x)
+            output = self.model(x)
         else:
             output = self.model(x, x_e)
 

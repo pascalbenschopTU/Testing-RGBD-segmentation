@@ -61,7 +61,7 @@ def initialize_model(config, model_weights, device):
     model.to(device)
     return model
 
-def get_scores_for_model(
+def get_predictions_for_model(
         model, 
         config, 
         model_weights, 
@@ -72,7 +72,8 @@ def get_scores_for_model(
         x_e_channels=1, 
         device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         create_confusion_matrix=True,
-        prediction_folder=None
+        prediction_folder=None,
+        specific_classes=[]
     ):
     print("device: ", device)
 
@@ -84,7 +85,11 @@ def get_scores_for_model(
 
     # Initialize model
     model = initialize_model(config, model_weights, device)
-    
+
+    model_weights_dir = os.path.dirname(os.path.normpath(model_weights))
+    prediction_folder = os.path.join(model_weights_dir, prediction_folder)
+    os.makedirs(prediction_folder, exist_ok=True)
+
     # Get validation loader
     val_loader, val_sampler = get_val_loader(None, RGBXDataset, config, 1)
 
@@ -97,6 +102,7 @@ def get_scores_for_model(
         device=device,
         bin_size=bin_size,
         ignore_background=ignore_background,
+        specific_classes=specific_classes,
         create_confusion_matrix=create_confusion_matrix,
         prediction_folder=prediction_folder,
     )
@@ -109,6 +115,7 @@ def create_predictions(
         device,
         bin_size=1000,
         ignore_background=False,
+        specific_classes=[],
         create_confusion_matrix=True,
         prediction_folder=None
     ):
@@ -123,8 +130,6 @@ def create_predictions(
     mious = []
     iou_stds = []
 
-    os.makedirs(prediction_folder, exist_ok=True)
-
     for i, minibatch in enumerate(tqdm(dataloader, dynamic_ncols=True)):
         images = minibatch["data"][0]
         labels = minibatch["label"][0]
@@ -132,6 +137,16 @@ def create_predictions(
 
         if len(labels.shape) == 2:
             labels = labels.unsqueeze(0)
+
+        skip_prediction = True
+        for specific_class in specific_classes:
+            mask = (labels == specific_class).int()
+            if mask.sum() > 500:
+                # Only skip if all the specific classes are too small
+                skip_prediction = False
+
+        if skip_prediction and len(specific_classes) > 0:
+            continue
 
         images = [images.to(device), modal_xs.to(device)]
         labels = labels.to(device)
@@ -157,7 +172,8 @@ def create_predictions(
 
             label = labels.cpu().numpy()[0]
             prediction = preds[0].cpu().numpy()
-            prediction = np.where(label == 0, 0, prediction)
+            if ignore_background:
+                prediction = np.where(label == 0, 0, prediction)
 
             ax[0].imshow(img)
             ax[0].axis('off')
@@ -198,11 +214,16 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--create_confusion_matrix", action="store_true")
     parser.add_argument("--prediction_folder", type=str, default=None)
+    parser.add_argument("-sc", "--specific_classes", nargs="+", type=int, default=[])
     args = parser.parse_args()
+
+    specific_classes = args.specific_classes
+    # Parse the classes to integers
+    specific_classes = [int(c) for c in args.specific_classes]
 
     print("hekkie")
 
-    get_scores_for_model(
+    get_predictions_for_model(
         model=args.model,
         config=args.config,
         model_weights=args.model_weights,
@@ -213,5 +234,6 @@ if __name__ == "__main__":
         x_e_channels=args.x_e_channels,
         device=torch.device(args.device),
         create_confusion_matrix=args.create_confusion_matrix,
-        prediction_folder=args.prediction_folder
+        prediction_folder=args.prediction_folder,
+        specific_classes=specific_classes
     )

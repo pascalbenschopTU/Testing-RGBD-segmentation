@@ -214,7 +214,8 @@ def save_results(model_results_file, metric, num_params, rgb_metric=None, depth_
 
     with open(model_results_file, 'a') as f:
         f.write(f'miou: {metric.miou:.2f}, macc: {metric.macc:.2f}, mf1: {metric.mf1:.2f}, class ious: {class_ious}\n')
-        f.write(f'model parameters: {num_params}\n')
+        if num_params != 0:
+            f.write(f'model parameters: {num_params}\n')
         if len(metric.bin_mious) > 1:
             f.write(f'bin_mious: {metric.bin_mious} ')
             f.write(f'bin_stdious: {metric.bin_stdious}\n')

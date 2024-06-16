@@ -185,7 +185,7 @@ def tune_hyperparameters(config, num_samples=20, max_num_epochs=5, cpus_per_tria
     }
 
     model = config.get("model", None)
-    large_models = ["mit_b2", "xception", "mit_b3", "DFormer-Base", "TokenFusion"]
+    large_models = ["mit_b2", "xception", "mit_b3", "DFormer-Base", "TokenFusion", "CMX"]
     if config.backbone in large_models or model in large_models:
         param_space["batch_size"] = tune.choice([4, 8])
     extra_large_models = ["DFormer-Large"]

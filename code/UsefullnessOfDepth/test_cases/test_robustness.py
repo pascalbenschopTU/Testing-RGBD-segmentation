@@ -142,7 +142,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-hs", "--num_hyperparameter_samples",
         type=int,
-        default=15,
+        default=20,
         help="The number of samples to use for hyperparameter tuning",
     )
     parser.add_argument(
@@ -333,7 +333,7 @@ if __name__ == "__main__":
                     device=device,
                     create_confusion_matrix=False,
                     bin_size=dataset_length,
-                    return_bins=True,
+                    return_metrics=True,
                 )
 
                 light_angle = np.linspace(-110, 110, 11)

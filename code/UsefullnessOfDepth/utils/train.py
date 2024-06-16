@@ -334,6 +334,7 @@ def save_checkpoint(model, optimizer, epoch, iteration, path):
 def prepare_SynthDet_config(config_location, model, dataset_classes, x_channels, x_e_channels, num_epochs, dataset_name=None):
     if dataset_name is None:
         return update_config(
+            config_location,
             {
                 "classes": dataset_classes,
                 "x_channels": x_channels,

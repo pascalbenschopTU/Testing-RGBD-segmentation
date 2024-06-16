@@ -5,9 +5,12 @@ import numpy as np
 import os
 from tqdm import tqdm
 import argparse
+import matplotlib.pyplot as plt
 from skimage.filters import threshold_multiotsu
 import sys
+import re
 sys.path.append('../UsefullnessOfDepth')
+
 
 # This class is used to add noise to the depth images
 # Taken from https://github.com/ankurhanda/simkinect/tree/master 
@@ -157,10 +160,12 @@ class KinectNoise:
         return noisy_depth
 
 def adapt_dataset(origin_directory_path, destination_directory_path, property_value, adaptation_method, split):
+    if split == "empty":
+        split = ""
     paths = [os.path.join(origin_directory_path, file) for file in os.listdir(origin_directory_path) if file.startswith(split)]
     destination_paths = [os.path.join(destination_directory_path, file) for file in os.listdir(origin_directory_path) if file.startswith(split)]
-    paths.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
-    destination_paths.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    paths.sort(key=lambda x: int(re.findall(r'\d+', x)[0]))
+    destination_paths.sort(key=lambda x: int(re.findall(r'\d+', x)[0]))
     print("Property value: ", property_value)                       
     # Initialize the progress bar
     progress_bar = tqdm(total=len(paths), desc=f'Processing files in {origin_directory_path}')
@@ -289,6 +294,17 @@ def adjust_black(image_path, destination_directory_path, _):
 
     return None
 
+def adjust_depth_color(image_path, destination_directory_path, _):
+    depth_image = np.array(Image.open(image_path))
+    depth_image = (depth_image - np.min(depth_image)) / (np.max(depth_image) - np.min(depth_image))
+    depth_image = (depth_image * 255).astype('uint8')
+    depth_image = plt.get_cmap('jet')(depth_image)[:, :, :3]
+    depth_image = (depth_image * 255).astype('uint8')
+    depth_image = Image.fromarray(depth_image)
+    depth_image.save(destination_directory_path)
+
+    return None
+
 def adjust_random_noise(image_path, destination_directory_path, _):
     image = np.array(Image.open(image_path))
     noise = np.random.normal(0, 1, image.shape)
@@ -345,6 +361,8 @@ def adapt_property(origin_directory_path, destination_directory_path, property_v
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_white, split)
     if property_name == "black":
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_black, split)
+    if property_name == "depth_color":
+        adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_depth_color, split)
     if property_name == "random_noise":
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_random_noise, split)
     if property_name == "copy":
@@ -358,7 +376,7 @@ if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     argparser.add_argument("-op", "--origin_directory_path", type=str, default="datasets/SUNRGBD/RGB_original", help="The path to the SUNRGBD dataset")
     argparser.add_argument("-dp", "--destination_directory_path", type=str, default="datasets/SUNRGBD/RGB", help="The path to save the adapted dataset")
-    argparser.add_argument("-s", "--split", type=str, default="test", help="The split to consider", choices=["train", "test"])
+    argparser.add_argument("-s", "--split", type=str, default="test", help="The split to consider")
     argparser.add_argument("-pname", '--property_name', help='Property name', default='saturation')
     argparser.add_argument("-pmin", '--min_property_value', help='Minimum property value', default=0.0, type=float)
     argparser.add_argument("-pmax", '--max_property_value', help='Maximum property value', default=1.0, type=float)

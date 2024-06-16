@@ -84,6 +84,8 @@ def merge_datasets(config, classes, background_dataset_path, result_dataset_path
         rgb = rgb.astype(np.uint8)
         depth = depth.astype(np.uint8)
 
+        rgb = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+
         # Get the classes in the image
         classes_in_image = set(label.flatten().tolist())
 
@@ -142,11 +144,9 @@ def merge_datasets(config, classes, background_dataset_path, result_dataset_path
 
         # Get the image
         background_rgb = cv2.imread(osp.join(background_dataset_path, rgb_folder, background_rgb_file), cv2.IMREAD_COLOR)
-        background_rgb = cv2.cvtColor(background_rgb, cv2.COLOR_BGR2RGB)
         background_depth = cv2.imread(osp.join(background_dataset_path, x_folder, background_depth_file), cv2.IMREAD_GRAYSCALE)
         background_label = cv2.imread(osp.join(background_dataset_path, gt_folder, background_label_file), cv2.IMREAD_GRAYSCALE)
 
-        # rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
         # Merge the image with the background based on the mask
         if original:
             new_rgb = np.array(rgb)
@@ -172,7 +172,7 @@ def merge_datasets(config, classes, background_dataset_path, result_dataset_path
         new_depth_file = osp.join(result_dataset_path, x_folder, background_depth_file)
         new_label_file = osp.join(result_dataset_path, gt_folder, background_label_file)
 
-        cv2.imwrite(new_rgb_file, cv2.cvtColor(new_rgb, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(new_rgb_file, new_rgb)
         cv2.imwrite(new_depth_file, new_depth)
         cv2.imwrite(new_label_file, new_label)
 
@@ -187,8 +187,6 @@ def main():
     parser.add_argument("-redp", "--result_dataset_path", type=str, help="Path to the dataset where the crops will be pasted")
     parser.add_argument("-c", "--config", type=str, help="Config file from original dataset")
     parser.add_argument("-cl", "--classes", nargs="+", type=str, help="Classes to crop")
-    parser.add_argument("-ms", "--min_scale", type=float, help="Minimum scale factor", default=1.0)
-    parser.add_argument("-mxs", "--max_scale", type=float, help="Maximum scale factor", default=1.3)
     parser.add_argument("-o", "--original", action="store_true", help="Use the original image instead of the cropped image")
     args = parser.parse_args()
 
