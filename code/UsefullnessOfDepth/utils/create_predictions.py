@@ -73,7 +73,8 @@ def get_predictions_for_model(
         device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         create_confusion_matrix=True,
         prediction_folder=None,
-        specific_classes=[]
+        specific_classes=[],
+        show_images=False
     ):
     print("device: ", device)
 
@@ -105,6 +106,7 @@ def get_predictions_for_model(
         specific_classes=specific_classes,
         create_confusion_matrix=create_confusion_matrix,
         prediction_folder=prediction_folder,
+        show_images=show_images,
     )
 
 
@@ -117,7 +119,8 @@ def create_predictions(
         ignore_background=False,
         specific_classes=[],
         create_confusion_matrix=True,
-        prediction_folder=None
+        prediction_folder=None,
+        show_images=False
     ):
     model.eval()
     n_classes = config.num_classes
@@ -178,7 +181,9 @@ def create_predictions(
             ax[0].imshow(img)
             ax[0].axis('off')
             ax[0].set_title("RGB Image")
-            ax[1].imshow(images[1].cpu().numpy().transpose(1, 2, 0), cmap='gray')
+            min_depth = -2.5
+            max_depth = 2.5
+            ax[1].imshow(images[1].cpu().numpy().transpose(1, 2, 0), cmap='gray', vmin=min_depth, vmax=max_depth)
             ax[1].axis('off')
             ax[1].set_title("Depth Image")
             ax[2].imshow(prediction, cmap='viridis')
@@ -187,6 +192,15 @@ def create_predictions(
             ax[3].imshow(label, cmap='viridis')
             ax[3].axis('off')
             ax[3].set_title("Ground Truth")
+
+            np.save(os.path.join(prediction_folder, f"rgb_image_{i}.npy"), img)
+            np.save(os.path.join(prediction_folder, f"depth_image_{i}.npy"), images[1].cpu().numpy().transpose(1, 2, 0))
+            np.save(os.path.join(prediction_folder, f"prediction_{i}.npy"), prediction)
+            np.save(os.path.join(prediction_folder, f"label_{i}.npy"), label)
+
+            if show_images:
+                plt.show()
+                continue
 
             plt.tight_layout()
             plt.savefig(os.path.join(prediction_folder, f"prediction_{i}.png"))
@@ -215,6 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--create_confusion_matrix", action="store_true")
     parser.add_argument("--prediction_folder", type=str, default=None)
     parser.add_argument("-sc", "--specific_classes", nargs="+", type=int, default=[])
+    parser.add_argument("--show", action="store_true")
     args = parser.parse_args()
 
     specific_classes = args.specific_classes
@@ -235,5 +250,6 @@ if __name__ == "__main__":
         device=torch.device(args.device),
         create_confusion_matrix=args.create_confusion_matrix,
         prediction_folder=args.prediction_folder,
-        specific_classes=specific_classes
+        specific_classes=specific_classes,
+        show_images=args.show
     )

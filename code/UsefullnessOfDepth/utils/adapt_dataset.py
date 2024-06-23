@@ -1,3 +1,4 @@
+from functools import partial
 import torchvision.transforms.functional as F
 from PIL import Image
 import cv2
@@ -344,7 +345,34 @@ def adjust_label_fgbg(image_path, destination_directory_path, _):
     label_image = Image.fromarray(label_image)
     label_image.save(destination_directory_path)
 
-def adapt_property(origin_directory_path, destination_directory_path, property_value, property_name, split):
+def adjust_depth_level(image_path, destination_path, depth_level, depth_range=0.1):
+    depth_image = Image.open(image_path)
+    depth_image = np.array(depth_image)
+    min_depth = np.min(depth_image)
+    max_depth = np.max(depth_image)
+
+    # Normalize to [0, 1]
+    normalized_depth_image = (depth_image - min_depth) / (max_depth - min_depth)
+
+    # Scale to the desired depth level
+    min_depth = 0
+    max_depth = 1 - depth_range
+    scaled_depth_image = normalized_depth_image * depth_range + min(max_depth, max(min_depth, depth_level))
+
+    depth_image = np.clip(scaled_depth_image * 255, 0, 255)
+
+    # Convert to uint8
+    depth_image = depth_image.astype(np.uint8)
+
+    depth_image = Image.fromarray(depth_image)
+    depth_image = depth_image.convert("L")
+
+    # Save the image
+    depth_image.save(destination_path)
+
+    return depth_level
+
+def adapt_property(origin_directory_path, destination_directory_path, property_value, property_name, split, **kwargs):
     if property_name == "saturation":
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_saturation, split)
     if property_name == "hue":
@@ -371,6 +399,9 @@ def adapt_property(origin_directory_path, destination_directory_path, property_v
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_blur, split)
     if property_name == "label_fgbg":
         adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_label_fgbg, split)
+    if property_name == "depth_level":
+        adjust_depth_level_func = partial(adjust_depth_level, depth_range=kwargs.get("depth_range", 0.1))
+        adapt_dataset(origin_directory_path, destination_directory_path, property_value, adjust_depth_level_func, split)
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
@@ -380,6 +411,8 @@ if __name__ == "__main__":
     argparser.add_argument("-pname", '--property_name', help='Property name', default='saturation')
     argparser.add_argument("-pmin", '--min_property_value', help='Minimum property value', default=0.0, type=float)
     argparser.add_argument("-pmax", '--max_property_value', help='Maximum property value', default=1.0, type=float)
+    argparser.add_argument("-pvr", '--property_value_range', help='Property value range', default=10, type=int)
+    argparser.add_argument("-dr", '--depth_range', help='Depth range', default=0.1, type=float)
 
     args = argparser.parse_args()
 
@@ -388,5 +421,12 @@ if __name__ == "__main__":
     else:
         property_value = args.min_property_value
 
-    adapt_property(args.origin_directory_path, args.destination_directory_path, property_value, args.property_name, args.split)
+    adapt_property(
+        args.origin_directory_path, 
+        args.destination_directory_path, 
+        property_value, 
+        args.property_name, 
+        args.split, 
+        depth_range=args.depth_range
+    )
     

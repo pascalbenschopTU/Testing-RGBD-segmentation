@@ -118,7 +118,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-d", "--dataset_dir",
         type=str,
-        default="datasets",
+        default=None,
         help="The directory containing the datasets to use for training",
     )
     parser.add_argument(
@@ -183,6 +183,12 @@ if __name__ == "__main__":
         default=["rgbd", "rgbd_variation"],
         help="The names of the models to train",
     )
+    parser.add_argument(
+        "-mw", "--model_weights",
+        type=str,
+        default=None,
+        help="The model weights file to use for evaluation",
+    )
     args = parser.parse_args()
     date_time = time.strftime("%Y%m%d_%H%M%S")
 
@@ -210,28 +216,40 @@ if __name__ == "__main__":
 
     dataset_name = args.dataset_dir
 
-    RGB_folder = os.path.join(args.dataset_dir, "RGB")
-    Depth_folder = os.path.join(args.dataset_dir, "Depth")
-    labels_folder = os.path.join(args.dataset_dir, "labels")
+    if dataset_name is not None:
+        RGB_folder = os.path.join(args.dataset_dir, "RGB")
+        Depth_folder = os.path.join(args.dataset_dir, "Depth")
+        labels_folder = os.path.join(args.dataset_dir, "labels")
+        RGB_original_folder = os.path.join(args.dataset_dir, "RGB_original")
+        if not os.path.exists(RGB_original_folder):
+            # Copy RGB to RGB_original with python
+            shutil.copytree(RGB_folder, RGB_original_folder)
+    else:
+        RGB_folder = config.rgb_root_folder
+        Depth_folder = config.x_root_folder
+        labels_folder = config.gt_root_folder
+        RGB_original_folder = os.path.join(os.path.dirname(RGB_folder), "RGB_original")
+        if not os.path.exists(RGB_original_folder):
+            # Copy RGB to RGB_original with python
+            shutil.copytree(RGB_folder, RGB_original_folder)
     if not os.path.exists(RGB_folder) or not os.path.exists(Depth_folder) or not os.path.exists(labels_folder):
         raise FileNotFoundError(f"Dataset {dataset_name} not found in datasets folder")
     
     dataset_length = len([f for f in os.listdir(RGB_folder) if f.startswith("test")])
-    
-    RGB_original_folder = os.path.join(args.dataset_dir, "RGB_original")
-    if not os.path.exists(RGB_original_folder):
-        # Copy RGB to RGB_original with python
-        shutil.copytree(RGB_folder, RGB_original_folder)
 
-    model_file_names = args.model_names
-    model_files = train_models(
-        log_file=log_file,
-        args=args,
-        config_location=config_location,
-        dataset_name=dataset_name,
-        model_file_names=model_file_names,
-        max_train_images=args.max_train_images,
-    )
+    if args.model_weights is not None:
+        model_files = {args.model: args.model_weights}
+        model_file_names = [args.model]
+    else:
+        model_file_names = args.model_names
+        model_files = train_models(
+            log_file=log_file,
+            args=args,
+            config_location=config_location,
+            dataset_name=dataset_name,
+            model_file_names=model_file_names,
+            max_train_images=args.max_train_images,
+        )
 
     experiments = ["saturation", "brightness", "hue"]
 
@@ -256,7 +274,7 @@ if __name__ == "__main__":
                 destination_directory_path=RGB_folder,
                 property_value=property_value,
                 property_name=experiments[i],
-                split="test",
+                split="",
             )
 
             with open(log_file, "a") as f:

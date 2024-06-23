@@ -296,9 +296,6 @@ def train_model_from_config(config, **kwargs):
                         print('saving model...')
                         save_checkpoint(model, optimizer, epoch, current_idx, os.path.join(config.log_dir, f"epoch_{epoch}_miou_{miou}.pth"))
                     
-                    # result_line = f'acc: {metrics.acc}, macc: {metrics.macc}, f1: {metrics.f1}, mf1: {metrics.mf1}, ious: {metrics.ious}, mious: {mious}\n'
-                    # with open(config.log_dir + '/results.txt', 'a') as file:
-                    #     file.write(result_line)
                     save_results(config.log_dir + '/results.txt', metrics, 0, rgb_metrics, depth_metrics)
                 
                 tb.add_scalar('val/macc', metrics.macc, epoch)
