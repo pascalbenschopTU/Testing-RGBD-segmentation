@@ -222,7 +222,7 @@ def train_model_from_config(config, **kwargs):
                         soft_output = F.log_softmax(out, dim=1)
                         loss += criterion(soft_output, gts)
 
-                    if config.lamda > 0:
+                    if config.lamda > 0 and masks is not None:
                         L1_loss = 0
                         for mask in masks:
                             L1_loss += sum([torch.abs(m).sum().cuda() for m in mask])

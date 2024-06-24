@@ -13,6 +13,7 @@ from models_CMX.builder import EncoderDecoder as CMXmodel
 from model_pytorch_deeplab_xception.deeplab import DeepLab
 from models_segformer import SegFormer
 from model_TokenFusion.segformer import WeTr as TokenFusion
+from models_Gemini.segformer import WeTr as Gemini
 from model_DACNN.model import DCNN
 
 from utils.init_func import group_weight
@@ -86,6 +87,10 @@ class ModelWrapper(nn.Module):
         elif self.model_name == "TokenFusion":
             self.is_token_fusion = True
             self.model = TokenFusion(cfg=self.config, pretrained=self.pretrained)
+            self.params_list = self.model.get_param_groups(self.config.lr, self.config.weight_decay)
+        elif self.model_name == "Gemini":
+            self.is_token_fusion = True
+            self.model = Gemini(cfg=self.config, pretrained=self.pretrained)
             self.params_list = self.model.get_param_groups(self.config.lr, self.config.weight_decay)
         elif self.model_name == "SegFormer":
             self.model = SegFormer(backbone=self.backbone, cfg=self.config, criterion=self.criterion)
