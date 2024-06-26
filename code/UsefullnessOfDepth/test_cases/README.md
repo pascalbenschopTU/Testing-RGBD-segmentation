@@ -3,7 +3,7 @@
 
 DFormer
 ```
-python .\test_cases\test_fgbg_aux.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg_spacing -c .\configs\SynthDet\SynthDet_foreground_background_test_pretrained_aux.py -mti 200 -mn rgbd rgbd_aux -m DFormer
+python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg_spacing -c .\configs\SynthDet\SynthDet_foreground_background_test_pretrained_aux.py -mti 200 -mn rgbd rgbd_aux -m DFormer
 ```
 
 TokenFusion:

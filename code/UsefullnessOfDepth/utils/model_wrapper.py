@@ -14,7 +14,7 @@ from model_pytorch_deeplab_xception.deeplab import DeepLab
 from models_segformer import SegFormer
 from model_TokenFusion.segformer import WeTr as TokenFusion
 from models_Gemini.segformer import WeTr as Gemini
-from model_DACNN.model import DCNN
+import model_DACNN.VGG as DACNN
 
 from utils.init_func import group_weight
 
@@ -101,7 +101,7 @@ class ModelWrapper(nn.Module):
             self.model = CMXmodel(cfg=self.config, criterion=self.criterion, norm_layer=self.norm_layer)
             self.params_list = group_weight([], self.model, self.norm_layer, self.config.lr)
         elif self.model_name == "DACNN":
-            self.model = DCNN(n_classes=self.config.num_classes, learned_billinear=False)
+            self.model = DACNN.vgg16(pretrained=False, num_classes=self.config.num_classes, depthconv=True)
             self.params_list = group_weight([], self.model, self.norm_layer, self.config.lr)
         else:
             raise ValueError("Model not found")
