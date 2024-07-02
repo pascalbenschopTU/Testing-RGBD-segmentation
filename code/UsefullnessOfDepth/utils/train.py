@@ -89,33 +89,9 @@ class TensorboardSummary(object):
                                                     config=config), 3, normalize=False, value_range=(0, 255))
         writer.add_image('Groundtruth_label', grid_image, global_step)
 
-def set_seed(seed):
-    # seed init.
-    random.seed(seed)
-    np.random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-
-    # torch seed init.
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.enabled = (
-        True  # train speed is slower after enabling this opts.
-    )
-
-    # https://pytorch.org/docs/stable/generated/torch.use_deterministic_algorithms.html
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-
-    # avoiding nondeterministic algorithms (see https://pytorch.org/docs/stable/notes/randomness.html)
-    torch.use_deterministic_algorithms(True, warn_only=True)
 
 def train_model_from_config(config, **kwargs):
     print(f"Using kwargs: {kwargs}")
-
-    # set_seed(config.seed)
 
     is_tuning = kwargs.get('is_tuning', False)
     use_tb = config.get('use_tb', False)
@@ -141,6 +117,8 @@ def train_model_from_config(config, **kwargs):
     if kwargs.get('val_loader', None) is not None:
         val_loader = kwargs.get('val_loader')
 
+    print('train_loader: ', len(train_loader), 'val_loader: ', len(val_loader), "config num_train_imgs: ", config.num_train_imgs)
+
     # Dont ignore the background class
     criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=config.background)
     BatchNorm2d = nn.BatchNorm2d
@@ -154,8 +132,9 @@ def train_model_from_config(config, **kwargs):
         pretrained=True,
     )
 
-    params_list = model.params_list
+    ############################################ Optimizer ###########################################
     
+    params_list = model.params_list
     
     if config.optimizer == 'AdamW':
         optimizer = torch.optim.AdamW(params_list, lr=base_lr, betas=(0.9, 0.999), weight_decay=config.weight_decay)
@@ -163,6 +142,8 @@ def train_model_from_config(config, **kwargs):
         optimizer = torch.optim.SGD(params_list, lr=base_lr, momentum=config.momentum, weight_decay=config.weight_decay)
     else:
         raise NotImplementedError
+    
+    ############################################ Scheduler ###########################################
 
     config.niters_per_epoch = config.num_train_imgs // config.batch_size + 1
     if is_tuning:
@@ -174,6 +155,7 @@ def train_model_from_config(config, **kwargs):
     print('device: ',device, 'model name: ',config.backbone, 'batch size: ',config.batch_size)
     model.to(device)
 
+    # Load pretrained model
     start_epoch = 1
 
     if config.pretrained_model is not None:
@@ -209,28 +191,9 @@ def train_model_from_config(config, **kwargs):
             modal_xs = modal_xs.cuda(non_blocking=True)
     
             output = model(imgs, modal_xs)
-            if use_aux:
-                foreground_mask = gts != config.background
-                label = (foreground_mask > 0).long()
-                loss = criterion(output[0], gts.long()) + config.aux_rate * criterion(output[1], label)
-                output = output[0]
-            else:
-                if model.is_token_fusion and isinstance(output, list):  # Output of TokenFusion
-                    output, masks = output
-                    loss = 0
-                    for out in output:
-                        soft_output = F.log_softmax(out, dim=1)
-                        loss += criterion(soft_output, gts)
 
-                    if config.lamda > 0 and masks is not None:
-                        L1_loss = 0
-                        for mask in masks:
-                            L1_loss += sum([torch.abs(m).sum().cuda() for m in mask])
-                        loss += config.lamda * L1_loss
-                else:
-                    loss = criterion(output, gts.long())
+            loss = model.get_loss(output, gts, criterion)
             
-
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -270,12 +233,7 @@ def train_model_from_config(config, **kwargs):
 
             with torch.no_grad():
                 model.eval()
-                device = torch.device('cuda')
-                # metrics = evaluate_torch(model, val_loader, config, device, ignore_class=config.background)
                 metrics, rgb_metrics, depth_metrics = evaluate(model, val_loader, config, device, bin_size=1000)
-                # ious, miou = metrics[0].compute_iou()
-                # acc, macc = metrics[0].compute_pixel_acc()
-                # f1, mf1 = metrics[0].compute_f1()
                 miou = metrics.miou
                 mious = [miou]
                 print('macc: ', metrics.macc, 'mf1: ', metrics.mf1, 'miou: ', metrics.miou)
@@ -423,6 +381,14 @@ def train_model(config_location: str,
             "num_train_imgs": max(1, min(config.num_train_imgs, max_train_images)),
         }
     )
+
+    if config_location in sys.modules:
+        del sys.modules[config_location]
+
+    # Now reload the module; it will be freshly loaded without using the cache
+    config_module = importlib.reload(importlib.import_module(config_location))
+    config = config_module.config
+    config.num_train_imgs = max(1, min(config.num_train_imgs, max_train_images))
 
     file_path = os.path.join(config.log_dir, f"x_{x_channels}_x_e_{x_e_channels}_best_hyperparameters.txt")
 

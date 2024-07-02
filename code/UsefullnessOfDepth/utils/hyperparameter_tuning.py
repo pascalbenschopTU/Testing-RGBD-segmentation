@@ -2,24 +2,15 @@ from functools import partial
 import os
 import sys
 from torch.utils.data import DataLoader
-from torch.utils.data import Subset
-import argparse
-import importlib
 import torch
-import torch.nn as nn
-from tensorboardX import SummaryWriter
-import random
 import numpy as np
 from functools import partial
 
 sys.path.append('../UsefullnessOfDepth')
 
 # Dataset
-from utils.dataloader.dataloader import get_train_loader,get_val_loader, ValPre
+from utils.dataloader.dataloader import ValPre
 from utils.dataloader.RGBXDataset import RGBXDataset
-from utils.init_func import init_weight, group_weight
-from utils.lr_policy import WarmUpPolyLR
-from utils.metrics_new import Metrics
 
 # Ray imports for hyperparameter tuning
 import ray
@@ -33,33 +24,6 @@ from ray.air.integrations.wandb import WandbLoggerCallback
 # https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html
 # https://docs.ray.io/en/latest/tune/examples/hpo-frameworks.html
 # https://docs.ray.io/en/latest/tune/api_docs/suggestion.html#tune-suggest-optuna
-
-    
-def evaluate(model, dataloader, config, device, criterion=nn.CrossEntropyLoss(reduction='mean')):
-    model.eval()
-    n_classes = config.num_classes
-    metrics = Metrics(n_classes, 255, device)
-
-    val_loss = 0.0
-    val_steps = 0
-
-    for minibatch in dataloader:
-        images = minibatch["data"][0]
-        labels = minibatch["label"][0]
-        modal_xs = minibatch["modal_x"][0]
-        # print(images.shape,labels.shape)
-        images = [images.to(device), modal_xs.to(device)]
-        labels = labels.to(device)
-        predictions = model(images[0], images[1])
-        if len(labels.shape) == 2:
-            labels = labels.unsqueeze(0)
-        # print(preds.shape,labels.shape)
-        metrics.update(predictions.softmax(dim=1), labels)
-        loss = criterion(predictions, labels.long())
-        val_loss += loss.item()
-        val_steps += 1
-
-    return metrics, val_loss / val_steps
 
 def get_dataset(config):
     data_setting = {'rgb_root': config.rgb_root_folder,
@@ -80,29 +44,6 @@ def get_dataset(config):
     train_dataset = RGBXDataset(data_setting, "train", train_preprocess, num_imgs)
 
     return train_dataset
-
-def set_seed(seed):
-    # seed init.
-    random.seed(seed)
-    np.random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-
-    # torch seed init.
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.enabled = (
-        True  # train speed is slower after enabling this opts.
-    )
-
-    # https://pytorch.org/docs/stable/generated/torch.use_deterministic_algorithms.html
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-
-    # avoiding nondeterministic algorithms (see https://pytorch.org/docs/stable/notes/randomness.html)
-    torch.use_deterministic_algorithms(True, warn_only=True)
 
 def ray_callback(miou, loss, epoch):
     train.report({"miou": miou, "loss": loss, "epoch": epoch})
@@ -185,13 +126,13 @@ def tune_hyperparameters(config, num_samples=20, max_num_epochs=5, cpus_per_tria
     }
 
     model = config.get("model", None)
-    large_models = ["mit_b2", "xception", "mit_b3", "DFormer-Base", "TokenFusion", "Gemini", "CMX"]
+    large_models = ["mit_b2", "xception", "mit_b3", "DFormer-Base", "TokenFusion", "Gemini", "CMX", "HIDANet"]
     if config.backbone in large_models or model in large_models:
         param_space["batch_size"] = tune.choice([4, 8])
     extra_large_models = ["DFormer-Large"]
     if config.backbone in extra_large_models:
         param_space["batch_size"] = tune.choice([4])
-    
+
     algorithm = OptunaSearch(
         metric="miou",
         mode="max",

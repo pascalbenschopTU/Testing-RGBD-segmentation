@@ -89,8 +89,8 @@ def get_dataset_details(variables_to_update, config):
 
     # In a one liner, go over all .png files in the label folder, get the unique classes by getting the unique values of pixels in the image
     classes = set(pixel for f in label_files for pixel in set(cv2.imread(os.path.join(label_files_location, f), cv2.IMREAD_UNCHANGED).flatten().tolist()))
-    # variables_to_update["num_classes"] = len(classes)
-    # variables_to_update["class_names"] = [f"class_{i}" for i in range(len(classes))]
+    variables_to_update["num_classes"] = len(classes)
+    variables_to_update["class_names"] = [f"class_{i}" for i in range(len(classes))]
 
     variables_to_update["num_train_imgs"] = len(train_files)
     variables_to_update["num_eval_imgs"] = len(test_files)

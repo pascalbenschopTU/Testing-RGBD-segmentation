@@ -9,9 +9,6 @@ import importlib
 
 sys.path.append('../UsefullnessOfDepth')
 
-from utils.update_config import update_config
-from utils.train import train_model
-from utils.image_prediction_pipeline import make_predictions
 from utils.evaluate_models import get_scores_for_model
 from utils.adjust_background_dataset import merge_datasets
 

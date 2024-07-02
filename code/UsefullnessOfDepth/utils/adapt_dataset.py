@@ -342,6 +342,7 @@ def adjust_label_fgbg(image_path, destination_directory_path, _):
     # Check that only integer values in the range 0, 255 are present
     assert label_image.dtype == np.uint8 and label_image.min() >= 0 and label_image.max() <= 255 
     label_image = np.where(label_image > 0, 1, 0)
+    label_image = label_image.astype(np.uint8)
     label_image = Image.fromarray(label_image)
     label_image.save(destination_directory_path)
 

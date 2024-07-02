@@ -1,6 +1,7 @@
 from inspect import signature
 from torch import nn
 import torch.nn.functional as F
+import torch
 import sys
 import cv2
 import numpy as np
@@ -8,13 +9,13 @@ import numpy as np
 sys.path.append('../UsefullnessOfDepth')
 # Models
 from model_DFormer.builder import EncoderDecoder as DFormer
-from model_DFormer.builder import EncoderDecoderMultiTask as DFormer_multitask
 from models_CMX.builder import EncoderDecoder as CMXmodel
 from model_pytorch_deeplab_xception.deeplab import DeepLab
 from models_segformer import SegFormer
 from model_TokenFusion.segformer import WeTr as TokenFusion
 from models_Gemini.segformer import WeTr as Gemini
 import model_DACNN.VGG as DACNN
+from model_HIDANet.model import HiDANet as HIDANet
 
 from utils.init_func import group_weight
 
@@ -75,11 +76,8 @@ class ModelWrapper(nn.Module):
                     raise ValueError("Model not found")
 
     def set_model(self):
-        if self.model_name == "DFormer" and not self.config.get("use_aux", False):
+        if self.model_name == "DFormer":
             self.model = DFormer(cfg=self.config, criterion=self.criterion, norm_layer=self.norm_layer)
-            self.params_list = group_weight([], self.model, self.norm_layer, self.config.lr)
-        elif self.model_name == "DFormer" and self.config.get("use_aux", False):
-            self.model = DFormer_multitask(cfg=self.config, criterion=self.criterion, norm_layer=self.norm_layer)
             self.params_list = group_weight([], self.model, self.norm_layer, self.config.lr)
         elif self.model_name == "DeepLab":
             self.model = DeepLab(cfg=self.config, criterion=self.criterion, norm_layer=self.norm_layer)
@@ -102,6 +100,9 @@ class ModelWrapper(nn.Module):
             self.params_list = group_weight([], self.model, self.norm_layer, self.config.lr)
         elif self.model_name == "DACNN":
             self.model = DACNN.vgg16(pretrained=False, num_classes=self.config.num_classes, depthconv=True)
+            self.params_list = group_weight([], self.model, self.norm_layer, self.config.lr)
+        elif self.model_name == "HIDANet":
+            self.model = HIDANet()
             self.params_list = group_weight([], self.model, self.norm_layer, self.config.lr)
         else:
             raise ValueError("Model not found")
@@ -130,3 +131,30 @@ class ModelWrapper(nn.Module):
             output = F.interpolate(output, size=x.size()[-2:], mode='bilinear', align_corners=False)
 
         return output
+    
+
+    def get_loss(self, output, target, criterion):
+        if self.config.get('use_aux', False):
+            foreground_mask = target != self.config.background
+            label = (foreground_mask > 0).long()
+            loss = criterion(output[0], target.long()) + self.config.aux_rate * criterion(output[1], label)
+            output = output[0]
+        else:
+            if self.is_token_fusion and isinstance(output, list):  # Output of TokenFusion
+                output, masks = output
+                loss = 0
+                for out in output:
+                    soft_output = F.log_softmax(out, dim=1)
+                    loss += criterion(soft_output, target)
+
+                if self.config.lamda > 0 and masks is not None:
+                    L1_loss = 0
+                    for mask in masks:
+                        L1_loss += sum([torch.abs(m).sum().cuda() for m in mask])
+                    loss += self.config.lamda * L1_loss
+            elif self.model_name == "HIDANet":
+                loss = self.model.calculate_loss(output, target)
+            else:
+                loss = criterion(output, target.long())
+
+        return loss

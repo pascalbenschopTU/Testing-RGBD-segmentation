@@ -5,20 +5,18 @@ import sys
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-from datetime import datetime
 import torch
+from torch.utils import data
 import torch.nn as nn
-from torchmetrics import JaccardIndex
+from PIL import Image
 
 sys.path.append('../UsefullnessOfDepth')
 
 # Model
 from utils.model_wrapper import ModelWrapper
 from utils.dataloader.RGBXDataset import RGBXDataset
-from utils.dataloader.dataloader import get_val_loader
+from utils.dataloader.dataloader import ValPre, get_val_loader
 from utils.engine.logger import get_logger
-from utils.metrics_new import Metrics
 from utils.evaluate_models import Evaluator
 
 def set_config_if_dataset_specified(config, dataset_location):
@@ -211,7 +209,91 @@ def create_predictions(
     print(evaluator.miou)
 
 
+def get_data_loader(engine, dataset,config,setting="val"):
+    data_setting = {'rgb_root': config.rgb_root_folder,
+                    'rgb_format': config.rgb_format,
+                    'gt_root': config.gt_root_folder,
+                    'gt_format': config.gt_format,
+                    'transform_gt': config.gt_transform,
+                    'x_root':config.x_root_folder,
+                    'x_format': config.x_format,
+                    'x_single_channel': config.x_is_single_channel,
+                    'class_names': config.class_names,
+                    'train_source': config.train_source,
+                    'eval_source': config.eval_source,
+                    'class_names': config.class_names}
+    val_preprocess = ValPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config)
 
+    val_dataset = dataset(data_setting, setting, val_preprocess, config.num_eval_imgs)
+
+
+    val_sampler = None
+    is_shuffle = False
+    batch_size = 1
+
+    if engine and engine.distributed:
+        val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset)
+        batch_size = 1
+        is_shuffle = False
+
+    val_loader = data.DataLoader(val_dataset,
+                                   batch_size=batch_size,
+                                   num_workers=config.num_workers,
+                                   drop_last=False,
+                                   shuffle=is_shuffle,
+                                   pin_memory=True,
+                                   sampler=val_sampler)
+
+    return val_loader, val_sampler
+
+def remove_background(
+        model_weights_dir, 
+        dataset_dir, 
+        config, 
+        new_folder="background_removed",
+        x_channels=1,
+        x_e_channels=1,
+        test_only=False,
+        device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ):
+    config = set_config_if_dataset_specified(config, dataset_dir)
+    config.x_channels = x_channels
+    config.x_e_channels = x_e_channels
+    model = ModelWrapper(config)
+    model.load_state_dict(torch.load(model_weights_dir)["model"])
+    print(f"Model loaded from {model_weights_dir}")
+    model = model.eval()
+    model = model.to(device)
+
+    new_rgb_folder = os.path.join(dataset_dir, new_folder)
+    if not os.path.exists(new_rgb_folder):
+        os.makedirs(new_rgb_folder)
+
+    file_name_prefix = ["test", "train"] 
+    dataloader_setting = ["val", "train"]
+    if test_only:
+        dataloader_setting = ["val"]
+
+    for idx, setting in enumerate(dataloader_setting):
+        dataloader, _ = get_data_loader(None, RGBXDataset, config, setting=setting)
+        for i, minibatch in enumerate(tqdm(dataloader, dynamic_ncols=True)):
+            image_tensor = minibatch["data"].to(device)
+            depth_tensor = minibatch["modal_x"].to(device)
+            target_tensor = minibatch["label"].to(device)
+            prediction = model(image_tensor, depth_tensor)
+            prediction_np = prediction[0, :, :, :].argmax(axis=0).detach().cpu().numpy()
+            unique_classes = np.unique(prediction_np)
+            category = 0
+            if category in unique_classes:
+                prediction_mask = np.where(prediction_np == category, 0, 1)
+                
+                image = image_tensor[0, :, :, :].detach().cpu().numpy().transpose(1, 2, 0)
+                image = prediction_mask[:, :, np.newaxis] * image
+                image = (image - image.min()) / (image.max() - image.min())
+
+                # Save image
+                Image.fromarray((image * 255).astype(np.uint8)).save(os.path.join(new_rgb_folder, f"{file_name_prefix[idx]}_{i}.png"))
+            
 
 
 

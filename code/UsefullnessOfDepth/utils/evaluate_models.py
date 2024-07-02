@@ -18,7 +18,6 @@ from utils.model_wrapper import ModelWrapper
 from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.dataloader.dataloader import get_val_loader, get_train_loader
 from utils.engine.logger import get_logger
-from utils.metrics_new import Metrics
 from utils.update_config import update_config
 
 
@@ -290,13 +289,12 @@ def get_scores_for_model(
 def evaluate(model, dataloader, config, device, bin_size=1):
     model.eval()
     n_classes = config.num_classes
-    # metrics = Metrics(n_classes, config.background - 100, device)
     evaluator = Evaluator(n_classes, bin_size=bin_size, ignore_index=config.background)
 
     rgb_evaluator = None
     depth_evaluator = None
 
-    if model.is_token_fusion or config.get('use_aux', False):
+    if model.is_token_fusion or config.get('use_aux', False) or model.model_name == "HIDANet":
         rgb_evaluator = Evaluator(n_classes, bin_size=bin_size, ignore_index=config.background)
         depth_evaluator = Evaluator(n_classes, bin_size=bin_size, ignore_index=config.background)
 
@@ -320,15 +318,30 @@ def evaluate(model, dataloader, config, device, bin_size=1):
 
             preds = preds[2] # Ensemble
 
+        if model.model_name == "HIDANet":
+            labels = labels.squeeze()
+            preds_rgb = preds[0].squeeze().sigmoid()
+            preds_depth = preds[1].squeeze().sigmoid()
+            # Convert sigmoid outputs to integers based on a threshold
+            preds_rgb_int = (preds_rgb > 0.5).int()
+            preds_depth_int = (preds_depth > 0.5).int()
+            rgb_evaluator.add_batch(labels.cpu().numpy(), preds_rgb_int.cpu().numpy())
+            depth_evaluator.add_batch(labels.cpu().numpy(), preds_depth_int.cpu().numpy())
+            preds = preds[2].squeeze().sigmoid() # Ensemble
+            # Convert ensemble predictions to integers
+            preds_int = (preds > 0.5).int()
+
+            evaluator.add_batch(labels.cpu().numpy(), preds_int.cpu().numpy())
+
         if config.get('use_aux', False):
             preds, aux_preds = preds[0], preds[1]
             binary_labels = (labels > 0).long()
             rgb_evaluator.add_batch(binary_labels.cpu().numpy(), aux_preds.softmax(1).argmax(1).cpu().numpy())
 
-        preds = preds.softmax(dim=1)
+        if not model.model_name == "HIDANet":
+            preds = preds.softmax(dim=1)
 
-        # metrics.update(preds, labels)
-        evaluator.add_batch(labels.cpu().numpy(), preds.argmax(1).cpu().numpy())
+            evaluator.add_batch(labels.cpu().numpy(), preds.argmax(1).cpu().numpy())
 
     evaluator.calculate_results(ignore_class=config.background)
     if rgb_evaluator is not None and depth_evaluator is not None:
