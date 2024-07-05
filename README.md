@@ -6,10 +6,16 @@ Repository for the master thesis project of Pascal Benschop.
 
 ### Setup
 
-clone SynthDet from unity: https://github.com/Unity-Technologies/SynthDet
+Clone SynthDet from unity: https://github.com/Unity-Technologies/SynthDet
 
-Run simulations via Unity, enable depth labeler.
+Open a Unity project with the folder. 
+Select the SynthDet scene from the `scenes` folder in Assets if it is not open.
+Click on the Main Camera in the Hierarchy menu. Under `Perception Camera (Script)` click on the `+` symbol under `Camera Labelers` and select the `Depth Labeler`.
 
+Then import the scripts from <TODO>
+
+
+## Experiments
 Activate conda environment:
 
 Step 1
@@ -31,27 +37,22 @@ pip install mmcv-full -f https://download.openmmlab.com/mmcv/dist/cu113/torch1.1
 pip install datasetinsights
 ```
 
-For Grad-CAM
-
-Navigate to pytorch-grad-cam, and once inside:
-```
-pip install .
-```
 
 ### Training
 
-Navigate to DFormer repository
-```
-python .\utils\train.py --config=path/to/config.py
-```
+Place model files in a folder under `UsefulnessOfDepth`.
+Then add the model to `UsefulnessOfDepth\utils\model_wrapper.py` in the `set_model` function. Also adjust the forward and get_loss function if the model has a specialized forward function / loss calculation.
+
+Then follow the instructions in the [README](code\UsefullnessOfDepth\test_cases\README.md) for testing the model on its robustness against variations in RGB, spatial layouts in Depth and changes in backgrounds with similar foregrounds.
 
 
 ## Sources
 
 [SynthDet](https://github.com/Unity-Technologies/SynthDet)
-[2.5 Malleable Convolution](https://github.com/charlesCXK/RGBD_Semantic_Segmentation_PyTorch)
-
-
-Apparently bincount is very slow with a lot of the same class https://discuss.pytorch.org/t/torch-bincount-1000x-slower-on-cuda/42654/2 
+[DFormer](https://github.com/VCIP-RGBD/DFormer)
+[TokenFusion](https://github.com/yikaiw/TokenFusion)
+[CMX](https://github.com/huaaaliu/RGBX_Semantic_Segmentation)
+[Gemini](https://github.com/JiaDingCN/GeminiFusion/tree/main)
+[HiDANet](https://github.com/Zongwei97/HIDANet/tree/main)
 
 

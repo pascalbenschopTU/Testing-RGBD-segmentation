@@ -3,8 +3,6 @@ from torch import nn
 import torch.nn.functional as F
 import torch
 import sys
-import cv2
-import numpy as np
 
 sys.path.append('../UsefullnessOfDepth')
 # Models
@@ -19,14 +17,6 @@ from model_HIDANet.model import HiDANet as HIDANet
 
 from utils.init_func import group_weight
 
-
-
-DFORMER_TINY_PRETRAINED_LOCATION = "checkpoints/pretrained/DFormer_Tiny.pth.tar"
-DFORMER_SMALL_PRETRAINED_LOCATION = "checkpoints/pretrained/DFormer_Small.pth.tar"
-MIT_B1_PRETRAINED_LOCATION = "checkpoints/pretrained/mit_b1.pth"
-MIT_B2_PRETRAINED_LOCATION = "checkpoints/pretrained/mit_b2.pth"
-MIT_B3_PRETRAINED_LOCATION = "checkpoints/pretrained/mit_b3.pth"
-DEEPLAB_PRETRAINED_LOCATION = "checkpoints/pretrained/xception-b5690688.pth"
 
 class ModelWrapper(nn.Module):
     def __init__(
@@ -52,29 +42,6 @@ class ModelWrapper(nn.Module):
         
         self.set_model()
 
-
-    def get_pretrained_weights(self):
-        if self.pretrained:
-            if self.pretrained_weights is not None:
-                return self.pretrained_weights
-            else:
-                if self.model_name == "DFormer" or self.model_name == "DFormer_multitask":
-                    if self.backbone == "DFormer-Tiny":
-                        return DFORMER_TINY_PRETRAINED_LOCATION
-                    if self.backbone == "DFormer-Small":
-                        return DFORMER_SMALL_PRETRAINED_LOCATION
-                elif self.model_name == "DeepLab":
-                    return DEEPLAB_PRETRAINED_LOCATION
-                elif self.model_name == "TokenFusion" or self.model_name == "SegFormer" or self.model_name == "CMX":
-                    if self.backbone.lower() == "mit_b1" or self.backbone.lower() == "mit-b1":
-                        return MIT_B1_PRETRAINED_LOCATION
-                    elif self.backbone.lower() == "mit_b2" or self.backbone.lower() == "mit-b2":
-                        return MIT_B2_PRETRAINED_LOCATION
-                    elif self.backbone.lower() == "mit_b3" or self.backbone.lower() == "mit-b3":
-                        return MIT_B3_PRETRAINED_LOCATION
-                else:
-                    raise ValueError("Model not found")
-
     def set_model(self):
         if self.model_name == "DFormer":
             self.model = DFormer(cfg=self.config, criterion=self.criterion, norm_layer=self.norm_layer)
@@ -94,7 +61,7 @@ class ModelWrapper(nn.Module):
             self.model = SegFormer(backbone=self.backbone, cfg=self.config, criterion=self.criterion)
             self.params_list = group_weight([], self.model, self.norm_layer, self.config.lr)
             if self.pretrained:
-                self.model.init_pretrained(self.get_pretrained_weights())
+                self.model.init_pretrained(self.config.pretrained_model)
         elif self.model_name == "CMX":
             self.model = CMXmodel(cfg=self.config, criterion=self.criterion, norm_layer=self.norm_layer)
             self.params_list = group_weight([], self.model, self.norm_layer, self.config.lr)
