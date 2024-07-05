@@ -211,14 +211,9 @@ if __name__ == "__main__":
     date_time = time.strftime("%Y%m%d_%H%M%S")
 
     config_location = args.config
-    if ".py" in config_location:
-        config_location = config_location.replace(".py", "")
-        config_location = config_location.replace("\\", ".")
-        while config_location.startswith("."):
-            config_location = config_location[1:]
 
     # Load the config file
-    config_module = importlib.import_module(config_location)
+    config_module = importlib.import_module(config_location.replace(".py", "").replace("\\", ".").lstrip("."))
     config = config_module.config
 
     # For dataset in args.dataset_dir:

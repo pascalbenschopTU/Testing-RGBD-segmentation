@@ -3,9 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule
 
-from mmseg.ops import resize
+from .ops import resize
 # from ..builder import HEADS
 from .decode_head import BaseDecodeHead
+
+
 
 
 class _MatrixDecomposition2DBase(nn.Module):

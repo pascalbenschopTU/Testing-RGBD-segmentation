@@ -23,13 +23,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "-c", "--config",
         type=str,
-        default="configs.SynthDet.SynthDet_template_DFormer_Tiny",
+        default="configs/NYUDepthV2_base_config.py",
         help="The config file to use for training the model",
     )
     parser.add_argument(
-        "-tc", "--test_config",
+        "-sc", "--SynthDet_config",
         type=str,
-        default="configs.SynthDet.SynthDet_template_DFormer_Tiny",
+        default="configs/SynthDet_base_config.py",
         help="The config file to use for testing the model",
     )
     parser.add_argument(
@@ -71,7 +71,7 @@ if __name__ == "__main__":
 
     nyudv2_config_module = args.config.replace(".py", "").replace("\\", ".").lstrip(".")
 
-    test_config_location = args.test_config.replace(".py", "").replace("\\", ".").lstrip(".")
+    SynthDet_config_location = args.SynthDet_config.replace(".py", "").replace("\\", ".").lstrip(".")
 
     # Load the config file
     config_module = importlib.import_module(nyudv2_config_module)
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
         metric, _, _ = get_scores_for_model(
             model=args.model,
-            config=test_config_location,
+            config=SynthDet_config_location,
             model_weights=args.model_weights,
             dataset=args.result_dataset_path,
             x_channels=3,
@@ -120,7 +120,7 @@ if __name__ == "__main__":
 
         metric, _, _ = get_scores_for_model(
             model=args.model,
-            config=test_config_location,
+            config=SynthDet_config_location,
             model_weights=args.model_weights,
             dataset=args.result_dataset_path,
             x_channels=3,

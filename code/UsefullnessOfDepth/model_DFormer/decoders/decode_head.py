@@ -7,7 +7,7 @@ import torch.nn as nn
 from mmengine.model.base_module import BaseModule
 
 # from mmseg.core import build_pixel_sampler
-from mmseg.ops import resize
+from .ops import resize
 from ..builder import build_loss
 from ..losses import accuracy
 

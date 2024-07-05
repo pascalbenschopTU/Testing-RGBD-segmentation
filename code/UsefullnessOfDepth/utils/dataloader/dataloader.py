@@ -3,9 +3,7 @@ import torch
 import numpy as np
 from torch.utils import data
 import random
-# from config import config
-# from train import config
-from utils.transforms import generate_random_crop_pos, random_crop_pad_to_shape, normalize
+from .transforms import generate_random_crop_pos, random_crop_pad_to_shape, normalize
 
 def resize_image(image, size):
     if not image.dtype == np.uint8 or not image.dtype == np.float32:

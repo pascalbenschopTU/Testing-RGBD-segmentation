@@ -192,10 +192,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     date_time = time.strftime("%Y%m%d_%H%M%S")
 
-    config_location = args.config.replace(".py", "").replace("\\", ".").lstrip(".")
+    config_location = args.config
 
     # Load the config file
-    config_module = importlib.import_module(config_location)
+    config_module = importlib.import_module(config_location.replace(".py", "").replace("\\", ".").lstrip("."))
     config = config_module.config
 
     # For dataset in args.dataset_dir:

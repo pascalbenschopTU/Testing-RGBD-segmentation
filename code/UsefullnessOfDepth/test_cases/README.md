@@ -3,39 +3,39 @@
 
 DFormer
 ```
-python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg_spacing -c .\configs\SynthDet\SynthDet_foreground_background_test_pretrained_aux.py -mti 200 -mn rgbd -m DFormer
+python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg\checkpoints_fgbg_spacing -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m DFormer_small
 ```
 
 TokenFusion:
 ```
-python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg_spacing_TF -c .\configs\SynthDet\SynthDet_foreground_background_test_pretrained_TF.py -mti 200 -m TokenFusion -mn rgbd
+python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg\checkpoints_fgbg_spacing_TF -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m TokenFusion_mit_b1
 ```
 
 SegFormer:
 ```
-python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg_spacing_SF -c .\configs\SynthDet\SynthDet_foreground_background_test_pretrained_SF.py -mti 200 -m SegFormer -mn rgb
+python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg\checkpoints_fgbg_spacing_SF -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m SegFormer_mit_b1
 ```
 
 # Spatial
 
 DFormer
 ```
-python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial_groceries -dc groceries -c .\configs\SynthDet\SynthDet_spatial_test_pretrained.py -mti 200 -mn rgbd -m DFormer
+python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial\DFormer -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m DFormer_small
 ```
 
 TokenFusion
 ```
-python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial_groceries_TF -dc groceries -c .\configs\SynthDet\SynthDet_spatial_test_pretrained_TF.py -mti 200 -mn rgbd -m TokenFusion
+python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial\TokenFusion -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m TokenFusion_mit_b1
 ```
 
 SegFormer
 ```
-python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial_groceries_SF -dc groceries -c .\configs\SynthDet\SynthDet_spatial_test_pretrained_SF.py -mti 200 -mn rgb -m SegFormer
+python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial\SegFormer -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m SegFormer_mit_b1
 ```
 
 CMX
 ```
-python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial_groceries_CMX -dc groceries -c .\configs\SynthDet\SynthDet_spatial_test_pretrained_CMX.py -mti 200 -mn rgb -m CMX
+python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial\CMX -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m CMX_mit_b1
 ```
 
 
@@ -43,27 +43,22 @@ python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_n
 
 DFormer
 ```
-python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness_groceries -dc groceries -c .\configs\SynthDet\SynthDet_robustness_test_pretrained.py -mti 200 -mn rgbd rgbd_variation -m DFormer
+python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness\DFormer -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd rgbd_variation -m DFormer_small
 ```
 
 TokenFusion
 ```
-python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness_groceries_TF -dc groceries -c .\configs\SynthDet\SynthDet_robustness_test_pretrained_TF.py -mti 200 -mn rgbd rgbd_variation -m TokenFusion
+python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness\TokenFusion -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd rgbd_variation -m TokenFusion_mit_b1
 ```
 
 SegFormer
 ```
-python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness_groceries_SF -dc groceries -c .\configs\SynthDet\SynthDet_robustness_test_pretrained_SF.py -mti 200 -mn rgb rgb_variation -m SegFormer
-```
-
-DeepLab
-```
-python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness_groceries_DL -dc groceries -c .\configs\SynthDet\SynthDet_robustness_test_pretrained_DL.py -mti 200 -mn rgb rgb_variation -m DeepLab
+python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness\SegFormer -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd rgbd_variation -m SegFormer_mit_b1
 ```
 
 CMX
 ```
-python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness_groceries_CMX -dc groceries -c .\configs\SynthDet\SynthDet_robustness_test_pretrained_CMX.py -mti 200 -mn rgbd rgbd_variation -m CMX
+python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness\CMX -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd rgbd_variation -m CMX_mit_b1
 
 ```
 

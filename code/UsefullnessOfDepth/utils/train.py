@@ -24,6 +24,8 @@ from utils.hyperparameter_tuning import tune_hyperparameters
 from utils.update_config import update_config
 from utils.model_wrapper import ModelWrapper
 
+MODEL_CONFIGURATION_DICT_FILE = "configs/model_configurations.json"
+
 class DummyTB:
     def add_scalar(self, *args, **kwargs):
         pass
@@ -286,46 +288,7 @@ def save_checkpoint(model, optimizer, epoch, iteration, path):
 
     torch.save(state_dict, path)
 
-def prepare_SynthDet_config(config_location, model, dataset_classes, x_channels, x_e_channels, num_epochs, dataset_name=None):
-    if dataset_name is None:
-        return update_config(
-            config_location,
-            {
-                "classes": dataset_classes,
-                "x_channels": x_channels,
-                "x_e_channels": x_e_channels,
-                "nepochs": num_epochs,
-            }
-        )
-    
-    new_config = update_config(
-        config_location, 
-        {
-            "dataset_name": dataset_name, 
-            "classes": dataset_classes, 
-            "x_channels": x_channels, 
-            "x_e_channels": x_e_channels,
-            "nepochs": num_epochs,
-        }
-    )
-
-    return new_config
-
-def prepare_other_config(config_location, x_channels, x_e_channels, num_epochs):
-    new_config = update_config(
-        config_location, 
-        { 
-            "x_channels": x_channels, 
-            "x_e_channels": x_e_channels,
-            "nepochs": num_epochs,
-        }
-    )
-
-    return new_config
-
-def run_hyperparameters(config_location, file_path, num_samples, num_hyperparameter_epochs):
-    config = importlib.import_module(config_location).config
-
+def run_hyperparameters(config, file_path, num_samples, num_hyperparameter_epochs):
     best_config_dict = tune_hyperparameters(
         config, 
         num_samples=num_samples, 
@@ -368,26 +331,36 @@ def train_model(config_location: str,
                 gpus: int=1,
     ):
 
-    if "SynthDet" in config_location:
-        config = prepare_SynthDet_config(config_location, model, dataset_classes, x_channels, x_e_channels, num_epochs, dataset_name)
-    else:
-        config = prepare_other_config(config_location, x_channels, x_e_channels, num_epochs)
+    with open(MODEL_CONFIGURATION_DICT_FILE, 'r') as f:
+        model_configurations = json.load(f)
+
+    if model is None:
+        raise ValueError("Model not provided")
+    
+    model_configuration = model_configurations.get(model, None)
+    if model_configuration is None:
+        raise ValueError(f"Model {model} not found in model configurations")
+
+    config_dict_to_update = {
+        "checkpoint_dir": checkpoint_dir,
+        "num_train_imgs": max_train_images,
+        "x_channels": x_channels,
+        "x_e_channels": x_e_channels,
+        "nepochs": num_epochs,
+    }
+
+    # Add model_configuration to config_dict_to_update
+    config_dict_to_update.update(model_configuration)
+
+    if dataset_name is not None:
+        config_dict_to_update["dataset_name"] = dataset_name
 
     config = update_config(
         config_location, 
-        {
-            "model": model,
-            "checkpoint_dir": checkpoint_dir,
-            "num_train_imgs": max(1, min(config.num_train_imgs, max_train_images)),
-        }
+        config_dict_to_update
     )
 
-    if config_location in sys.modules:
-        del sys.modules[config_location]
-
-    # Now reload the module; it will be freshly loaded without using the cache
-    config_module = importlib.reload(importlib.import_module(config_location))
-    config = config_module.config
+    # make sure the number of training images is within the range
     config.num_train_imgs = max(1, min(config.num_train_imgs, max_train_images))
 
     file_path = os.path.join(config.log_dir, f"x_{x_channels}_x_e_{x_e_channels}_best_hyperparameters.txt")
@@ -412,9 +385,9 @@ def train_model(config_location: str,
         except Exception as e:
             print(f"Error while processing hyperparameters: {e}")
             print("Getting new hyperparameters")
-            config = run_hyperparameters(config_location, file_path, num_hyperparameter_samples, num_hyperparameter_epochs)
+            config = run_hyperparameters(config, file_path, num_hyperparameter_samples, num_hyperparameter_epochs)
     if num_hyperparameter_epochs > 0:
-        config = run_hyperparameters(config_location, file_path, num_hyperparameter_samples, num_hyperparameter_epochs)
+        config = run_hyperparameters(config, file_path, num_hyperparameter_samples, num_hyperparameter_epochs)
 
     best_miou = train_model_from_config(config)
 
@@ -485,11 +458,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config_location = args.config
-    if ".py" in config_location:
-        config_location = config_location.replace(".py", "")
-        config_location = config_location.replace("\\", ".")
-        while config_location.startswith("."):
-            config_location = config_location[1:]
 
     best_miou, config = train_model(
         config_location=config_location,

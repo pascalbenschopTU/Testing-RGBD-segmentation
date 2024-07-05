@@ -17,7 +17,6 @@ from model_HIDANet.model import HiDANet as HIDANet
 
 from utils.init_func import group_weight
 
-
 class ModelWrapper(nn.Module):
     def __init__(
             self,
@@ -38,8 +37,7 @@ class ModelWrapper(nn.Module):
         if hasattr(self.config, "model"):
             self.model_name = self.config.model
         else:
-            self.model_name = "DFormer"
-        
+            self.model_name = "DFormer_Tiny"
         self.set_model()
 
     def set_model(self):

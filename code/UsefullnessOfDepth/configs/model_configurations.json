@@ -1,0 +1,80 @@
+{
+    "CMX_mit_b1": {
+      "model": "CMX",
+      "backbone": "mit_b1",
+      "pretrained_model": "checkpoints/pretrained/mit_b1.pth",
+      "decoder": "MLPDecoder"
+    },
+    "CMX_mit_b2": {
+      "model": "CMX",
+      "backbone": "mit_b2",
+      "pretrained_model": "checkpoints/pretrained/mit_b2.pth",
+      "decoder": "MLPDecoder"
+    },
+    "DFormer_tiny": {
+      "model": "DFormer",
+      "backbone": "DFormer-Tiny",
+      "pretrained_model": "checkpoints/pretrained/DFormer_Tiny.pth.tar",
+      "decoder": "ham"
+    },
+    "DFormer_small": {
+      "model": "DFormer",
+      "backbone": "DFormer-Small",
+      "pretrained_model": "checkpoints/pretrained/DFormer_Small.pth.tar",
+      "decoder": "ham"
+    },
+    "DFormer_base": {
+      "model": "DFormer",
+      "backbone": "DFormer-Base",
+      "pretrained_model": "checkpoints/pretrained/DFormer_Base.pth.tar",
+      "decoder": "ham"
+    },
+    "DFormer_large": {
+      "model": "DFormer",
+      "backbone": "DFormer-Large",
+      "pretrained_model": "checkpoints/pretrained/DFormer_Large.pth.tar",
+      "decoder": "ham"
+    },
+    "TokenFusion_mit_b1": {
+      "model": "TokenFusion",
+      "backbone": "mit_b1",
+      "pretrained_model": "checkpoints/pretrained/mit_b1.pth",
+      "decoder": "Unused"
+    },
+    "TokenFusion_mit_b2": {
+      "model": "TokenFusion",
+      "backbone": "mit_b2",
+      "pretrained_model": "checkpoints/pretrained/mit_b2.pth",
+      "decoder": "Unused"
+    },
+    "SegFormer_mit_b1": {
+      "model": "SegFormer",
+      "backbone": "MiT-B1",
+      "pretrained_model": "checkpoints/pretrained/mit_b1.pth",
+      "decoder": "Unused"
+    },
+    "SegFormer_mit_b2": {
+      "model": "SegFormer",
+      "backbone": "MiT-B2",
+      "pretrained_model": "checkpoints/pretrained/mit_b2.pth",
+      "decoder": "Unused"
+    },
+    "Gemini_mit_b1": {
+      "model": "Gemini",
+      "backbone": "mit_b1",
+      "pretrained_model": "checkpoints/pretrained/mit_b1.pth",
+      "decoder": "Unused"
+    },
+    "Gemini_mit_b2": {
+      "model": "Gemini",
+      "backbone": "mit_b2",
+      "pretrained_model": "checkpoints/pretrained/mit_b2.pth",
+      "decoder": "Unused"
+    },
+    "HIDANet": {
+        "model": "HIDANet",
+        "backbone": "hidanet",
+        "pretrained_model": "checkpoints/pretrained/mit_b1.pth",
+        "decoder": "Unused"
+    }
+  }

@@ -169,11 +169,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     date_time = time.strftime("%Y%m%d_%H%M%S")
 
-    config_location = args.config.replace(".py", "").replace("\\", ".").lstrip(".")
-
-    # Load the config file
-    config_module = importlib.import_module(config_location)
-    config = config_module.config
+    config_location = args.config
 
     # For dataset in args.dataset_dir:
     # Train the model with the dataset on RGB-D 

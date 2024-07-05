@@ -12,7 +12,7 @@ import shutil
 sys.path.append('../UsefullnessOfDepth')
 
 from utils.update_config import update_config
-from utils.train import train_model
+from utils.train import MODEL_CONFIGURATION_DICT_FILE
 from utils.adapt_dataset_and_test import test_property_shift
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -64,11 +64,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
     date_time = time.strftime("%Y%m%d_%H%M%S")
 
-    config_location = args.config.replace(".py", "").replace("\\", ".").lstrip(".")
+    with open(MODEL_CONFIGURATION_DICT_FILE, 'r') as f:
+        model_configurations = json.load(f)
 
-    # Load the config file
-    config_module = importlib.import_module(config_location)
-    config = config_module.config
+    if args.model is None:
+        raise ValueError("Model not provided")
+    
+    model_configuration = model_configurations.get(args.model, None)
+    if model_configuration is None:
+        raise ValueError(f"Model {args.model} not found in model configurations")
+
+    update_config(args.config, model_configuration)
 
     if not os.path.exists(args.checkpoint_dir):
         os.makedirs(args.checkpoint_dir)

@@ -164,21 +164,6 @@ if __name__ == "__main__":
     date_time = time.strftime("%Y%m%d_%H%M%S")
 
     config_location = args.config
-    if ".py" in config_location:
-        config_location = config_location.replace(".py", "")
-        config_location = config_location.replace("\\", ".")
-        while config_location.startswith("."):
-            config_location = config_location[1:]
-
-    # Load the config file
-    config_module = importlib.import_module(config_location)
-    config = config_module.config
-
-    # For dataset in args.dataset_dir:
-    # Train the model with the dataset on RGB-D (model A) and Depth
-    # Remove background with model trained on depth
-    # Train the model on RGB with the background removed (model B)
-    # Evaluate the models (A and B) on this and other datasets in dataset_dir and report the difference with RGB-D
 
     if not os.path.exists(args.checkpoint_dir):
         os.makedirs(args.checkpoint_dir)
@@ -196,11 +181,6 @@ if __name__ == "__main__":
         # If the train.txt file is empty, skip the dataset
         if not os.path.exists(dataset_train_file) or os.path.getsize(dataset_train_file) == 0:
             continue
-
-        # If there is a directory containing the dataset name in the checkpoint dir
-        # Check if there are directories starting with run
-        # If there are, skip training the model
-        # If there are not, train the model
 
         model_file_names = args.model_names
         model_files = train_models(
