@@ -55,21 +55,21 @@ For the SegFormer mit weights, use this [google drive link](https://drive.google
 
 For the DFormer weights, use this [google drive link](https://drive.google.com/drive/folders/1YuW7qUtnguUFkhC-sfqGySrerjK0rZJX?usp=sharing) from the [DFormer: Rethinking RGBD Representation Learning for Semantic Segmentation](https://github.com/VCIP-RGBD/DFormer) repository.
 
-Then store all weights under a folder `UsefulnessOfDepth\checkpoints\pretrained`. See for example the [model configurations](code\UsefullnessOfDepth\configs\model_configurations.json) file.
+Then store all weights under a folder `UsefulnessOfDepth/checkpoints/pretrained`. See for example the [model configurations](code/UsefullnessOfDepth/configs/model_configurations.json) file.
 
 ### Model setup
 Place model files in a folder under `UsefulnessOfDepth`.
-Then add the model to [model_wrapper.py](code\UsefullnessOfDepth\utils\model_wrapper.py) in the `set_model` function. Also adjust the `forward` and `get_loss` function if the model has a specialized forward function / loss calculation.
+Then add the model to [model_wrapper.py](code/UsefullnessOfDepth/utils/model_wrapper.py) in the `set_model` function. Also adjust the `forward` and `get_loss` function if the model has a specialized forward function / loss calculation.
 
 ### Dataset setup
 
-The test suites and the background dataset can be downloaded as a zip from this [google drive link](https://drive.google.com/file/d/1PxgtCENRhFFNqKPtmzWrFyxlclGmmGw9/view?usp=drive_link). Place the folders under `UsefulnessOfDepth\datasets`.
+The test suites and the background dataset can be downloaded as a zip from this [google drive link](https://drive.google.com/file/d/1PxgtCENRhFFNqKPtmzWrFyxlclGmmGw9/view?usp=drive_link). Place the folders under `UsefulnessOfDepth/datasets`.
 
-The NYUDepthV2 (and SUNRGBD) datasets can be downloaded from this [google drive link](https://drive.google.com/drive/folders/1RIa9t7Wi4krq0YcgjR3EWBxWWJedrYUl) from the [DFormer](https://github.com/VCIP-RGBD/DFormer) repository. Place these folders under `UsefulnessOfDepth\datasets`.
+The NYUDepthV2 (and SUNRGBD) datasets can be downloaded from this [google drive link](https://drive.google.com/drive/folders/1RIa9t7Wi4krq0YcgjR3EWBxWWJedrYUl) from the [DFormer](https://github.com/VCIP-RGBD/DFormer) repository. Place these folders under `UsefulnessOfDepth/datasets`.
 
 ### Training
 
-Then follow the instructions in the [README](code\UsefullnessOfDepth\test_cases\README.md) for testing the model on its robustness against variations in RGB, spatial layouts in Depth and changes in backgrounds with similar foregrounds.
+Then follow the instructions in the [README](code/UsefullnessOfDepth/test_cases/README.md) for testing the model on its robustness against variations in RGB, spatial layouts in Depth and changes in backgrounds with similar foregrounds.
 
 ## SynthDet
 
@@ -81,7 +81,7 @@ Open a Unity project with the folder.
 Select the SynthDet scene from the `scenes` folder in Assets if it is not open.
 Click on the Main Camera in the Hierarchy menu. Under `Perception Camera (Script)` click on the `+` symbol under `Camera Labelers` and select the `Depth Labeler`.
 
-Then copy the scripts from `UsefullnessOfDepth\SynthDet_tools\Randomizers` to The Unity project `path\to\SynthDet\Assets\Scripts\Randomizers`.
+Then copy the scripts from `UsefullnessOfDepth/SynthDet_tools/Randomizers` to The Unity project `path/to/SynthDet/Assets/Scripts/Randomizers`.
 
 
 
