@@ -9,7 +9,6 @@ import seaborn as sns
 from datetime import datetime
 import torch
 import torch.nn as nn
-from torchmetrics import JaccardIndex
 
 sys.path.append('../UsefullnessOfDepth')
 

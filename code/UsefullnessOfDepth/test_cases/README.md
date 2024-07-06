@@ -1,45 +1,8 @@
 
-# FgBG
+# Commands for testing models.
+See the following commands for testing different models (specified by the `-m` parameter) on the different settings.
 
-DFormer
-```
-python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg\checkpoints_fgbg_spacing -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m DFormer_small
-```
-
-TokenFusion:
-```
-python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg\checkpoints_fgbg_spacing_TF -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m TokenFusion_mit_b1
-```
-
-SegFormer:
-```
-python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg_large_spacing_appearance\ -chdir checkpoints_fgbg\checkpoints_fgbg_spacing_SF -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m SegFormer_mit_b1
-```
-
-# Spatial
-
-DFormer
-```
-python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial\DFormer -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m DFormer_small
-```
-
-TokenFusion
-```
-python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial\TokenFusion -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m TokenFusion_mit_b1
-```
-
-SegFormer
-```
-python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial\SegFormer -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m SegFormer_mit_b1
-```
-
-CMX
-```
-python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial_realistic_no_walls\ -chdir checkpoints_spatial\CMX -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m CMX_mit_b1
-```
-
-
-# Robustness
+## Robustness to RGB variations
 
 DFormer
 ```
@@ -59,11 +22,53 @@ python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\Synth
 CMX
 ```
 python .\test_cases\test_robustness.py -d .\datasets\test_suite_robustness\SynthDet_robustness_groceries\ -chdir checkpoints_robustness\CMX -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd rgbd_variation -m CMX_mit_b1
+```
 
+## Spatial variations
+
+DFormer
+```
+python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial\ -chdir checkpoints_spatial\DFormer -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m DFormer_small
+```
+
+TokenFusion
+```
+python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial\ -chdir checkpoints_spatial\TokenFusion -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m TokenFusion_mit_b1
+```
+
+SegFormer
+```
+python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial\ -chdir checkpoints_spatial\SegFormer -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m SegFormer_mit_b1
+```
+
+CMX
+```
+python .\test_cases\test_spatial.py -d .\datasets\test_suite_spatial\ -chdir checkpoints_spatial\CMX -dc groceries -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m CMX_mit_b1
+```
+
+## Changing backgrounds
+
+DFormer
+```
+python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg\ -chdir checkpoints_fgbg\checkpoints_fgbg_spacing -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m DFormer_small
+```
+
+TokenFusion:
+```
+python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg\ -chdir checkpoints_fgbg\checkpoints_fgbg_spacing_TF -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m TokenFusion_mit_b1
+```
+
+SegFormer:
+```
+python .\test_cases\test_fgbg.py -d .\datasets\test_suite_fgbg\ -chdir checkpoints_fgbg\checkpoints_fgbg_spacing_SF -c .\configs\SynthDet_base_config.py -mti 200 -mn rgbd -m SegFormer_mit_b1
 ```
 
 
-### NYUDV2
+
+
+
+
+### NYUDV2 [WIP]
 
 Foreground background tests on NYUDv2
 ```
