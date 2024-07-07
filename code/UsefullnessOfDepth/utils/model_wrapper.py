@@ -71,6 +71,8 @@ class ModelWrapper(nn.Module):
         self.is_rgb_model = len(signature(self.model.forward).parameters) == 1
         print("Model: ", self.model_name, " BackBone: ", self.backbone, " Pretrained: ", self.pretrained, " RGB Model: ", self.is_rgb_model)
     
+    # Assumes the model takes in RGB in the shape (B, 3, H, W) and depth in the shape (B, 1, H, W)
+    # Where B is the batch size, H is the height and W is the width of the input images
     def forward(self, x, x_e):
         if self.model is None:
             raise ValueError("Model not found")
@@ -95,12 +97,14 @@ class ModelWrapper(nn.Module):
     
 
     def get_loss(self, output, target, criterion):
+        # If the model has an auxillary loss, use it
         if self.config.get('use_aux', False):
             foreground_mask = target != self.config.background
             label = (foreground_mask > 0).long()
             loss = criterion(output[0], target.long()) + self.config.aux_rate * criterion(output[1], label)
             output = output[0]
         else:
+            # If the model is (similar to) TokenFusion, the output is a list of outputs and masks
             if self.is_token_fusion and isinstance(output, list):  # Output of TokenFusion
                 output, masks = output
                 loss = 0
@@ -113,8 +117,10 @@ class ModelWrapper(nn.Module):
                     for mask in masks:
                         L1_loss += sum([torch.abs(m).sum().cuda() for m in mask])
                     loss += self.config.lamda * L1_loss
+            # HIDANet model has a special loss function
             elif self.model_name == "HIDANet":
                 loss = self.model.calculate_loss(output, target)
+            # The default loss function
             else:
                 loss = criterion(output, target.long())
 
