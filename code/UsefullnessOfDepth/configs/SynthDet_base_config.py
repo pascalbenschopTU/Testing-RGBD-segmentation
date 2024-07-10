@@ -57,19 +57,19 @@ C.norm_mean = np.array([0.485, 0.456, 0.406])
 C.norm_std = np.array([0.229, 0.224, 0.225])
 
 """ Settings for network, this would be different for each kind of model"""
-C.model = 'DFormer'
-C.backbone = 'DFormer-Small'
-C.pretrained_model = 'checkpoints/pretrained/DFormer_Small.pth.tar'
-C.decoder = 'ham'
+C.model = 'TokenFusion'
+C.backbone = 'mit_b1'
+C.pretrained_model = 'checkpoints/pretrained/mit_b1.pth'
+C.decoder = 'Unused'
 C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'
 
 """Train Config"""
 C.start_epoch = 1
-C.lr = 0.0002228292059834231
-C.lr_power = 0.8723816185315307
-C.momentum = 0.9323823925465781
-C.weight_decay = 0.005905567108732078
+C.lr = 0.0009170520130146771
+C.lr_power = 0.9565171047274893
+C.momentum = 0.9888028408819087
+C.weight_decay = 0.0016370843117954452
 C.lamda = 1e-6
 C.batch_size = 4
 C.val_batch_size = 16
@@ -92,6 +92,15 @@ C.eval_scale_array = [0.5,0.75,1,1.25,1.5] # [0.75, 1, 1.25] # 0.5,0.75,1,1.25,1
 C.eval_flip =  True # False #
 C.eval_crop_size = [480, 480] # [height weight]
 
+"""Augmentation Config"""
+C.random_black = False
+C.random_mirror = False
+C.random_crop_and_scale = False
+C.random_crop = False
+C.random_color_jitter = False
+C.min_color_jitter = 0.0
+C.max_color_jitter = 1.0
+
 """Store Config"""
 C.checkpoint_start_epoch = 9 # 200
 C.checkpoint_step = 10
@@ -102,7 +111,7 @@ def add_path(path):
         sys.path.insert(0, path)
 add_path(osp.join(C.root_dir))
 
-C.checkpoint_dir = 'checkpoints_robustness\\DFormer'
+C.checkpoint_dir = 'checkpoints_robustness\\TokenFusion'
 C.log_dir = osp.abspath(osp.join(C.checkpoint_dir, C.dataset_name + '_' + C.backbone))
 C.tb_dir = osp.abspath(osp.join(C.log_dir, "tb"))
 C.log_dir_link = C.log_dir
@@ -110,6 +119,6 @@ C.log_dir_link = C.log_dir
 if __name__ == '__main__':
     print(config.nepochs)
 
-C.date_time = '20240612-121117'
+C.date_time = '20240710-133710'
 
-C.random_color_jitter = False
+

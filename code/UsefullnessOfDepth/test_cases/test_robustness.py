@@ -24,7 +24,7 @@ x_e_channels_map = {"rgbd": 1, "rgbd_variation":1, "rgb": 3, "rgb_variation": 3,
 
 def train_model_on_dataset(args, dataset_name, config_location, x_channels, x_e_channels, max_train_images=500):
     best_miou, config = train_model(
-        config_location,
+        config_location=config_location,
         checkpoint_dir=args.checkpoint_dir,
         model=args.model,
         dataset_classes=args.dataset_classes,
@@ -83,8 +83,8 @@ def train_models(log_file, args, config_location, dataset_name, model_file_names
                 config_location, 
                 {
                     "random_color_jitter": True,
-                    "min_color_jitter": 0.7,
-                    "max_color_jitter": 1.3,
+                    "min_color_jitter": 0.0,
+                    "max_color_jitter": 1.0,
                 }   
             )
 
@@ -237,6 +237,13 @@ if __name__ == "__main__":
     
     dataset_length = len([f for f in os.listdir(RGB_folder) if f.startswith("test")])
 
+    update_config(
+        config_location, 
+        {
+            "num_eval_imgs": dataset_length,
+        }   
+    )
+
     if args.model_weights is not None:
         model_files = {args.model: args.model_weights}
         model_file_names = [args.model]
@@ -320,6 +327,7 @@ if __name__ == "__main__":
     else:
         for dataset_name in os.listdir(dataset_test_root_dir):
             dataset_test_dir = os.path.join(dataset_test_root_dir, dataset_name)
+            print(f"Test dataset: {dataset_test_dir}")
             # if not dataset_name in args.dataset_dir:
             #     continue
             
@@ -327,6 +335,7 @@ if __name__ == "__main__":
                 config_location, 
                 {
                     "dataset_name": dataset_test_dir,
+                    "num_eval_imgs": len([f for f in os.listdir(os.path.join(dataset_test_dir, "RGB")) if f.startswith("test")]),
                 }   
             )
 
@@ -369,6 +378,7 @@ if __name__ == "__main__":
         config_location, 
         {
             "dataset_name": args.dataset_dir,
+            "num_eval_imgs": dataset_length,
         }   
     )
 

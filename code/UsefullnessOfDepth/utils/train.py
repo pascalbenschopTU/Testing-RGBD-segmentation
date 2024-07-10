@@ -309,13 +309,7 @@ def run_hyperparameters(config, file_path, num_samples, num_hyperparameter_epoch
     except Exception as e:
         print(f"Error occurred while writing to file: {e}")
 
-    # Update the training config with the best hyperparameters
-    config = update_config(
-        config_location, 
-        best_config_dict
-    )
-
-    return config
+    return best_config_dict
 
 def train_model(config_location: str, 
                 checkpoint_dir: str="checkpoints", 
@@ -385,9 +379,14 @@ def train_model(config_location: str,
         except Exception as e:
             print(f"Error while processing hyperparameters: {e}")
             print("Getting new hyperparameters")
-            config = run_hyperparameters(config, file_path, num_hyperparameter_samples, num_hyperparameter_epochs)
+            best_hyperparameter_dict = run_hyperparameters(config, file_path, num_hyperparameter_samples, num_hyperparameter_epochs)
     if num_hyperparameter_epochs > 0:
-        config = run_hyperparameters(config, file_path, num_hyperparameter_samples, num_hyperparameter_epochs)
+        best_hyperparameter_dict = run_hyperparameters(config, file_path, num_hyperparameter_samples, num_hyperparameter_epochs)
+
+    config = update_config(
+        config_location,
+        best_hyperparameter_dict
+    )
 
     best_miou = train_model_from_config(config)
 

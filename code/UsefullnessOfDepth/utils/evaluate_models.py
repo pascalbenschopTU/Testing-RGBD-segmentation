@@ -150,13 +150,13 @@ def set_config_if_dataset_specified(config_location, dataset_name):
     
 logger = get_logger()
 def load_config(config, dataset=None, x_channels=-1, x_e_channels=-1):
-    module_name = config.replace(".py", "").replace("\\", ".").lstrip(".")
-    
     if dataset is not None:
-        config = set_config_if_dataset_specified(module_name, dataset)
-    
-    config_module = importlib.import_module(module_name)
-    config = config_module.config
+        config = set_config_if_dataset_specified(config, dataset)
+    else:
+        module_name = config.replace(".py", "").replace("\\", ".").lstrip(".")
+        
+        config_module = importlib.import_module(module_name)
+        config = config_module.config
     
     if x_channels != -1 and x_e_channels != -1:
         config.x_channels = x_channels

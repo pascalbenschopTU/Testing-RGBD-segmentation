@@ -35,8 +35,8 @@ C.eval_source = osp.join(C.dataset_path, "test.txt")
 C.is_test = True
 
 
-C.num_train_imgs = 200
-C.num_eval_imgs = 500
+C.num_train_imgs = 795
+C.num_eval_imgs = 654
 
 
 # Set classes to "groceries", "all" or "gems"
@@ -50,7 +50,7 @@ C.class_names =  ['background', 'wall','floor','cabinet','bed','chair','sofa','t
 
 """Image Config"""
 # Background class is 0, set to -1 to ignore
-C.background = -1
+C.background = 0
 C.image_height = 400
 C.image_width = 400
 C.norm_mean = np.array([0.485, 0.456, 0.406])

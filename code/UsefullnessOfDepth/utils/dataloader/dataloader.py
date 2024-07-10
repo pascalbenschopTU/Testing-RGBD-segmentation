@@ -2,6 +2,7 @@ import cv2
 import torch
 import numpy as np
 from torch.utils import data
+from torchvision import transforms
 import random
 from .transforms import generate_random_crop_pos, random_crop_pad_to_shape, normalize
 
@@ -65,15 +66,25 @@ class TrainPre(object):
         min_color_jitter = self.kwargs.get('min_color_jitter', 0.7)
         max_color_jitter = self.kwargs.get('max_color_jitter', 1.3)
         if color_jitter:
-            rgb = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
-            rgb = rgb.astype(np.float32)
-            rgb[:, :, 0] *= np.random.uniform(min_color_jitter, max_color_jitter)
-            rgb[:, :, 0] = rgb[:, :, 0] % 180
-            rgb[:, :, 1] *= np.random.uniform(min_color_jitter, max_color_jitter)
-            rgb[:, :, 2] *= np.random.uniform(min_color_jitter, max_color_jitter)
-            rgb = np.clip(rgb, 0, 255)
-            rgb = rgb.astype(np.uint8)
-            rgb = cv2.cvtColor(rgb, cv2.COLOR_HSV2RGB)
+            # rgb = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+            # rgb = rgb.astype(np.float32)
+            # rgb[:, :, 0] *= np.random.uniform(min_color_jitter, max_color_jitter)
+            # rgb[:, :, 0] = rgb[:, :, 0] % 180
+            # rgb[:, :, 1] *= np.random.uniform(min_color_jitter, max_color_jitter)
+            # rgb[:, :, 2] *= np.random.uniform(min_color_jitter, max_color_jitter)
+            # rgb = np.clip(rgb, 0, 255)
+            # rgb = rgb.astype(np.uint8)
+            # rgb = cv2.cvtColor(rgb, cv2.COLOR_HSV2RGB)
+
+
+            min_hue_jitter = -(max((1.0 - min_color_jitter), 0) % 0.5)
+            max_hue_jitter = (max_color_jitter - 1.0) % 0.5
+            rgb = transforms.ColorJitter(brightness=(min_color_jitter, max_color_jitter),
+                                         contrast=(min_color_jitter, max_color_jitter),
+                                         saturation=(min_color_jitter, max_color_jitter),
+                                         hue=(min_hue_jitter, max_hue_jitter))(transforms.ToPILImage()(rgb))
+
+            rgb = np.array(rgb)
 
         random_noise_rgb = self.kwargs.get('random_noise_rgb', False)
         random_noise_rgb_prob = self.kwargs.get('random_noise_rgb_prob', 0.5)
@@ -171,10 +182,10 @@ def get_train_loader(engine, dataset, config):
         'random_crop_and_scale': config.get('random_crop_and_scale', False),
         'random_crop': config.get('random_crop', False),
         'random_color_jitter': config.get('random_color_jitter', False),
+        'min_color_jitter': config.get('min_color_jitter', 1.0),
+        'max_color_jitter': config.get('max_color_jitter', 1.0),
     }
     
-    # train_preprocess = TrainPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config)
-    # train_preprocess = ValPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config)
     print("Using following augmentations: ", train_loader_args)
     train_preprocess = TrainPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config, **train_loader_args)
 

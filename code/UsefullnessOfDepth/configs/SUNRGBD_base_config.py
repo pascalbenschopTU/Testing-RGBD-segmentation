@@ -35,8 +35,8 @@ C.eval_source = osp.join(C.dataset_path, "test.txt")
 C.is_test = True
 
 
-C.num_train_imgs = 200
-C.num_eval_imgs = 500
+C.num_train_imgs = 5285
+C.num_eval_imgs = 5050
 
 C.classes = 'SUNRGBD'
 C.num_classes = 38
@@ -86,6 +86,15 @@ C.eval_stride_rate = 2 / 3
 C.eval_scale_array = [0.5,0.75,1,1.25,1.5] # [0.75, 1, 1.25] # 0.5,0.75,1,1.25,1.5
 C.eval_flip =  True # False #
 C.eval_crop_size = [480, 480] # [height weight]
+
+"""Augmentation Config"""
+C.random_black = False
+C.random_mirror = False
+C.random_crop_and_scale = False
+C.random_crop = False
+C.random_color_jitter = False
+C.min_color_jitter = 0.0
+C.max_color_jitter = 1.0
 
 """Store Config"""
 C.checkpoint_start_epoch = 9 # 200
