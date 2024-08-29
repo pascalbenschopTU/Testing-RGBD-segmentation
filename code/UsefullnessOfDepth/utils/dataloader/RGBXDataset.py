@@ -30,6 +30,7 @@ class RGBXDataset(data.Dataset):
 
     def __len__(self):
         if self._file_length is not None:
+            assert isinstance(self._file_length, int)
             return self._file_length
         return len(self._file_names)
 
@@ -113,11 +114,14 @@ class RGBXDataset(data.Dataset):
     @staticmethod
     def _open_image(filepath, mode=cv2.IMREAD_COLOR, dtype=None):
         try:
-            img = np.array(cv2.imread(filepath, mode), dtype=dtype)
+            img = cv2.imread(filepath, mode)
+            if img is None:
+                raise ValueError(f"Image not found or unable to read: {filepath}")
+            img = np.array(img, dtype=dtype)
             if len(img.shape) > 2 and (img.shape[2] == 3 or img.shape[2] == 4):
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         except Exception as e:
-            print("Error: ", e, " filepath: ", filepath)
+            raise ValueError(f"Error: {e}, filepath: {filepath}")
         return img
 
     @classmethod

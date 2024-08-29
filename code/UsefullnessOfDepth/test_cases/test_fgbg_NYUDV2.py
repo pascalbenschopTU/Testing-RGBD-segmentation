@@ -11,6 +11,8 @@ sys.path.append('../UsefullnessOfDepth')
 
 from utils.evaluate_models import get_scores_for_model
 from utils.adjust_background_dataset import merge_datasets
+from utils.update_config import update_config
+from utils.train import MODEL_CONFIGURATION_DICT_FILE
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -71,11 +73,24 @@ if __name__ == "__main__":
 
     nyudv2_config_module = args.config.replace(".py", "").replace("\\", ".").lstrip(".")
 
-    SynthDet_config_location = args.SynthDet_config.replace(".py", "").replace("\\", ".").lstrip(".")
-
     # Load the config file
     config_module = importlib.import_module(nyudv2_config_module)
     config = config_module.config
+
+    if args.model is None:
+        raise ValueError("Model not specified")
+    
+    with open(MODEL_CONFIGURATION_DICT_FILE, "r") as f:
+        model_configurations = json.load(f)
+
+    model_configuration_dict = model_configurations.get(args.model, {})
+
+    SynthDet_classes = importlib.import_module(args.SynthDet_config.replace(".py", "").replace("\\", ".").lstrip(".")).config.num_classes
+
+    updated_config_dict = {"num_classes": config.num_classes}
+    updated_config_dict.update(model_configuration_dict)
+
+    update_config(args.SynthDet_config, updated_config_dict)
 
     if not os.path.exists(args.checkpoint_dir):
         os.makedirs(args.checkpoint_dir)
@@ -98,7 +113,7 @@ if __name__ == "__main__":
 
         metric, _, _ = get_scores_for_model(
             model=args.model,
-            config=SynthDet_config_location,
+            config=args.SynthDet_config,
             model_weights=args.model_weights,
             dataset=args.result_dataset_path,
             x_channels=3,
@@ -108,7 +123,7 @@ if __name__ == "__main__":
             return_metrics=True,
         )
 
-        miou_class = metric.ious[class_id - 1]
+        miou_class = metric.ious[class_id]
 
         with open(log_file, "a") as f:
             f.write(
@@ -120,7 +135,7 @@ if __name__ == "__main__":
 
         metric, _, _ = get_scores_for_model(
             model=args.model,
-            config=SynthDet_config_location,
+            config=args.SynthDet_config,
             model_weights=args.model_weights,
             dataset=args.result_dataset_path,
             x_channels=3,
@@ -130,9 +145,12 @@ if __name__ == "__main__":
             return_metrics=True,
         )
 
-        miou_class = metric.ious[class_id - 1]
+        miou_class = metric.ious[class_id]
 
         with open(log_file, "a") as f:
             f.write(
                 f"Original mIoU: {miou_class}\n"
             )
+
+
+    update_config(args.SynthDet_config, {"num_classes": SynthDet_classes})

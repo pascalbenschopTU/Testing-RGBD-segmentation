@@ -9,6 +9,7 @@ import seaborn as sns
 from datetime import datetime
 import torch
 import torch.nn as nn
+import json
 
 sys.path.append('../UsefullnessOfDepth')
 
@@ -18,6 +19,9 @@ from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.dataloader.dataloader import get_val_loader, get_train_loader
 from utils.engine.logger import get_logger
 from utils.update_config import update_config
+
+
+MODEL_CONFIGURATION_DICT_FILE = "configs/model_configurations.json"
 
 
 class Evaluator(object):
@@ -356,7 +360,7 @@ if __name__ == '__main__':
     argparser.add_argument('-mw', '--model_weights', help='File of model weights')
     argparser.add_argument('-d', '--dataset', default=None, help='Dataset dir')
 
-    argparser.add_argument('-m', '--model', help='Model name', default='DFormer-Tiny')
+    argparser.add_argument('-m', '--model', help='Model name', default=None)
     argparser.add_argument('-b', '--bin_size', help='Bin size for testing', default=1000, type=int)
     # argparser.add_argument('-ib', '--ignore_background', action='store_true', help='Ignore background class')
 
@@ -364,6 +368,14 @@ if __name__ == '__main__':
     argparser.add_argument('-xec', '--x_e_channels', help='Number of channels in X_e', default=-1, type=int)
 
     args = argparser.parse_args()
+
+    if args.model is not None:
+        with open(MODEL_CONFIGURATION_DICT_FILE, 'r') as f:
+            model_configuration_dict = json.load(f)
+        if args.model not in model_configuration_dict:
+            raise ValueError(f"Model {args.model} not found in model configuration dictionary")
+        
+        update_config(args.config, model_configuration_dict[args.model])
 
     get_scores_for_model(
         model_weights=args.model_weights,

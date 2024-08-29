@@ -40,7 +40,7 @@ def get_dataset(config):
                     'class_names': config.class_names}
     train_preprocess = ValPre(config.norm_mean, config.norm_std,config.x_is_single_channel,config)
 
-    num_imgs = (config.num_train_imgs // config.batch_size + 1) * config.batch_size
+    num_imgs = int((config.num_train_imgs // config.batch_size + 1) * config.batch_size)
     train_dataset = RGBXDataset(data_setting, "train", train_preprocess, num_imgs)
 
     return train_dataset
@@ -59,7 +59,6 @@ def train_dformer(hyperparameters, config, train_dataset, num_epochs=5, train_ca
     config.warm_up_epoch = 1
 
     # set_seed(config.seed)
-
     dataset_length = len(train_dataset)
     train_length = int(0.8 * dataset_length)
     validate_length = dataset_length - train_length

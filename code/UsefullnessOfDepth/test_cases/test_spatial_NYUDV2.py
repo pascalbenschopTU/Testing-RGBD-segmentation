@@ -28,7 +28,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-d", "--dataset_dir",
         type=str,
-        default="datasets",
+        default=None,
         help="The directory containing the datasets to use for training",
     )
     parser.add_argument(
@@ -74,19 +74,13 @@ if __name__ == "__main__":
     if model_configuration is None:
         raise ValueError(f"Model {args.model} not found in model configurations")
 
-    update_config(args.config, model_configuration)
+    config = update_config(args.config, model_configuration)
 
     if not os.path.exists(args.checkpoint_dir):
         os.makedirs(args.checkpoint_dir)
-
-    if args.log_file is not None:
-        log_file = args.log_file
-    else:
-        log_file = os.path.join(args.checkpoint_dir, f"log_{date_time}.txt")
-        with open(log_file, "w") as f:
-            f.write("Log file for spatial tests on NYUDepthV2\n\n")
-            f.write(f"Arguments: {args}\n\n")
     
+    if args.dataset_dir is None:
+        args.dataset_dir = config.dataset_path
     if not os.path.exists(args.dataset_dir):
         raise ValueError("The dataset directory does not exist")
     else:
@@ -122,7 +116,7 @@ if __name__ == "__main__":
     #         result_file.write(f"mIoU values: {miou_values}\n")
     #         result_file.write("\n")
 
-    property_values = np.linspace(0, 0.9, 10)
+    property_values = np.array([0.0, 0.5, 0.9])
     args.property_name = "depth_level"
     args.depth_range = 0.1
 
@@ -139,7 +133,8 @@ if __name__ == "__main__":
         args=args
     )
 
-    property_values = np.linspace(0, 0.8, 5)
+
+    property_values = np.array([0.0, 0.5, 0.8])
     args.property_name = "depth_level"
     args.depth_range = 0.2
 

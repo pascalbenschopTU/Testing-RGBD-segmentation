@@ -110,14 +110,15 @@ def train_model_from_config(config, **kwargs):
             tb_summary = TensorboardSummary(tb_dir)
             tb = tb_summary.create_summary()
 
-    train_loader, _ = get_train_loader(None, RGBXDataset, config)
-    val_loader, _ = get_val_loader(None, RGBXDataset, config, 1)
-
-    # Special loaders for hyperparameter tuning
+    # Get data loader from kwargs if it exists
     if kwargs.get('train_loader', None) is not None:
         train_loader = kwargs.get('train_loader')
+    else:
+        train_loader, _ = get_train_loader(None, RGBXDataset, config)
     if kwargs.get('val_loader', None) is not None:
         val_loader = kwargs.get('val_loader')
+    else:
+        val_loader, _ = get_val_loader(None, RGBXDataset, config, 1)
 
     print('train_loader: ', len(train_loader), 'val_loader: ', len(val_loader), "config num_train_imgs: ", config.num_train_imgs)
 
@@ -235,7 +236,7 @@ def train_model_from_config(config, **kwargs):
 
             with torch.no_grad():
                 model.eval()
-                metrics, rgb_metrics, depth_metrics = evaluate(model, val_loader, config, device, bin_size=1000)
+                metrics, rgb_metrics, depth_metrics = evaluate(model, val_loader, config, device, bin_size=float('inf'))
                 miou = metrics.miou
                 mious = [miou]
                 print('macc: ', metrics.macc, 'mf1: ', metrics.mf1, 'miou: ', metrics.miou)
@@ -337,7 +338,6 @@ def train_model(config_location: str,
 
     config_dict_to_update = {
         "checkpoint_dir": checkpoint_dir,
-        "num_train_imgs": max_train_images,
         "x_channels": x_channels,
         "x_e_channels": x_e_channels,
         "nepochs": num_epochs,
@@ -468,7 +468,7 @@ if __name__ == "__main__":
         num_epochs=args.num_epochs,
         x_channels=args.x_channels,
         x_e_channels=args.x_e_channels,
-        gpus=args.gpus
+        gpus=args.gpus,
     )
 
     print(f"Best mIoU: {best_miou}")
